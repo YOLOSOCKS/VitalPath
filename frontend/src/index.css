@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Scrollbar for "Cyberpunk" feel */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #000; 
+}
+::-webkit-scrollbar-thumb {
+  background: #333; 
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00f0ff; 
+}
+
+/* RED ALERT OVERRIDES */
+body.red-alert {
+  --tw-text-opacity: 1;
+}
+
+/* Force Cyan Text to turn Red */
+body.red-alert .text-cyan-400 {
+  color: #ef4444 !important; /* Tailwind Red-500 */
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+/* Force Borders to turn Red */
+body.red-alert .border-cyan-500\/30,
+body.red-alert .border-white\/10 {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.2) inset;
+}
+
+/* Force Backgrounds to pulse Red */
+body.red-alert .bg-cyan-950\/30 {
+  background-color: rgba(69, 10, 10, 0.4) !important;
+}
