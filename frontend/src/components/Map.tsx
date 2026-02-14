@@ -213,8 +213,39 @@ export default function LiveMap({
         paint: { 'line-width': 6, 'line-color': '#00f0ff', 'line-opacity': 0.85 },
       });
 
-      // Initial route (so the demo starts "alive")
+      // Start routing immediately — don't wait for 3D buildings
       fetchRoute();
+
+      // Defer 3D buildings so they don't block the initial animation
+      setTimeout(() => {
+        const style = map.current?.getStyle();
+        if (!style) return;
+        const sources = style.sources || {};
+        const buildingSource = sources['openmaptiles'] ? 'openmaptiles' : (sources['carto'] ? 'carto' : null);
+
+        if (buildingSource) {
+          const labelLayerId = style.layers?.find(
+            (layer) => layer.type === 'symbol' && layer.layout && (layer.layout as any)['text-field']
+          )?.id;
+
+          map.current?.addLayer(
+            {
+              id: '3d-buildings',
+              source: buildingSource,
+              'source-layer': 'building',
+              type: 'fill-extrusion',
+              minzoom: 15,
+              paint: {
+                'fill-extrusion-color': '#333',
+                'fill-extrusion-height': ['get', 'render_height'],
+                'fill-extrusion-base': ['get', 'render_min_height'],
+                'fill-extrusion-opacity': 0.6,
+              },
+            },
+            labelLayerId
+          );
+        }
+      }, 1000);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -309,8 +340,8 @@ export default function LiveMap({
       console.error('Route fetch failed', e);
       setRouteError(
         e?.response?.data?.detail ||
-          e?.message ||
-          'Route fetch failed. Is the backend running on http://127.0.0.1:8000 ?'
+        e?.message ||
+        'Route fetch failed. Is the backend running on http://127.0.0.1:8000 ?'
       );
     } finally {
       setIsRouting(false);
@@ -331,8 +362,8 @@ export default function LiveMap({
       console.error('Geocode failed', e);
       setRouteError(
         e?.response?.data?.detail ||
-          e?.message ||
-          'Geocode failed. Try a simpler query like "Mackenzie Health" or "Markham Stouffville Hospital".'
+        e?.message ||
+        'Geocode failed. Try a simpler query like "Mackenzie Health" or "Markham Stouffville Hospital".'
       );
       setIsRouting(false);
     }
@@ -409,10 +440,26 @@ export default function LiveMap({
 
       const brg = bearingDeg(a, b);
 
+      // Dynamic zoom/pitch for turn-awareness
+      const BASE_ZOOM = 16;
+      const TURN_ZOOM = 18.5;
+      const TURN_DIST_THRESHOLD = 100; // start zooming in 100m before turn
+
+      let targetZoom = BASE_ZOOM;
+      const isApproachingTurn =
+        nav.distance_to_next_m < TURN_DIST_THRESHOLD &&
+        (nav.next_instruction.toLowerCase().includes('turn') || nav.next_instruction.toLowerCase().includes('onto'));
+
+      if (isApproachingTurn) {
+        const factor = 1 - (nav.distance_to_next_m / TURN_DIST_THRESHOLD);
+        targetZoom = BASE_ZOOM + (TURN_ZOOM - BASE_ZOOM) * factor;
+      }
+
       if (followRef.current) {
         map.current.easeTo({
           center: pos,
           bearing: brg,
+          zoom: targetZoom,
           duration: 120,
           easing: (x) => x,
           essential: true,
@@ -437,9 +484,8 @@ export default function LiveMap({
       <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-xl p-3 rounded-lg border border-cyan-500/30 flex flex-col gap-1 min-w-[220px]">
         <div className="flex items-center gap-2">
           <div
-            className={`w-2 h-2 rounded-full ${
-              activeScenario?.isRedAlert ? 'bg-red-500 animate-pulse' : 'bg-cyan-400'
-            }`}
+            className={`w-2 h-2 rounded-full ${activeScenario?.isRedAlert ? 'bg-red-500 animate-pulse' : 'bg-cyan-400'
+              }`}
           />
           <span className="text-cyan-400 text-[10px] font-mono font-bold uppercase tracking-tighter">
             {activeScenario?.title || 'SYSTEM IDLE'}
@@ -470,19 +516,17 @@ export default function LiveMap({
         <button
           onClick={handleGeocode}
           disabled={isRouting}
-          className={`px-3 py-1 rounded border text-xs font-mono ${
-            isRouting
-              ? 'bg-white/5 border-white/10 text-gray-400 cursor-not-allowed'
-              : 'bg-cyan-500/20 border-cyan-400/40 text-cyan-300 hover:bg-cyan-500/30'
-          }`}
+          className={`px-3 py-1 rounded border text-xs font-mono ${isRouting
+            ? 'bg-white/5 border-white/10 text-gray-400 cursor-not-allowed'
+            : 'bg-cyan-500/20 border-cyan-400/40 text-cyan-300 hover:bg-cyan-500/30'
+            }`}
         >
           {isRouting ? '...' : 'GO'}
         </button>
         <button
           onClick={() => setIsFollowing((v) => !v)}
-          className={`px-2 py-1 rounded border text-xs font-mono ${
-            isFollowing ? 'border-cyan-400/50 text-cyan-300' : 'border-white/10 text-gray-400'
-          }`}
+          className={`px-2 py-1 rounded border text-xs font-mono ${isFollowing ? 'border-cyan-400/50 text-cyan-300' : 'border-white/10 text-gray-400'
+            }`}
         >
           {isFollowing ? 'FOLLOW' : 'FREE'}
         </button>
