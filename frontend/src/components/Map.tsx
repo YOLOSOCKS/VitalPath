@@ -5,12 +5,39 @@ import axios from 'axios';
 
 type LatLng = { lat: number; lng: number };
 
+export type NavLive = {
+  distance_to_next_m: number;
+  next_instruction: string;
+  current_street: string;
+  eta_remaining_s: number;
+  remaining_distance_m: number;
+  algorithm?: string;
+  total_distance_m?: number;
+  total_time_s?: number;
+  sim_speedup: number;
+};
+
+type NavStep = {
+  id: number;
+  instruction: string;
+  street: string;
+  start_distance_m: number;
+  end_distance_m: number;
+  maneuver: string;
+};
+
 type RouteResponse = {
   path_coordinates: [number, number][]; // [lng, lat]
   snapped_start?: [number, number];
   snapped_end?: [number, number];
   algorithm?: string;
   execution_time_ms?: number;
+
+  total_distance_m?: number;
+  total_time_s?: number;
+  cum_distance_m?: number[];
+  cum_time_s?: number[];
+  steps?: NavStep[];
 };
 
 const api = axios.create({
@@ -19,45 +46,85 @@ const api = axios.create({
   baseURL: (import.meta as any).env?.VITE_API_BASE || '',
 });
 
-function haversineMeters(a: [number, number], b: [number, number]): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const R = 6371000;
-  const lat1 = toRad(a[1]);
-  const lat2 = toRad(b[1]);
-  const dLat = lat2 - lat1;
-  const dLng = toRad(b[0] - a[0]);
-  const s = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
-}
-
-function buildCumulativeDistances(coords: [number, number][]): number[] {
-  const cum: number[] = new Array(coords.length).fill(0);
-  for (let i = 1; i < coords.length; i++) {
-    cum[i] = cum[i - 1] + haversineMeters(coords[i - 1], coords[i]);
-  }
-  return cum;
-}
-
 function bearingDeg(a: [number, number], b: [number, number]): number {
-  // Simple bearing (good enough for short steps)
   const dLng = b[0] - a[0];
   const dLat = b[1] - a[1];
-  return (Math.atan2(dLng, dLat) * 180) / Math.PI;
+  const ang = (Math.atan2(dLng, dLat) * 180) / Math.PI;
+  return (ang + 360) % 360;
 }
 
-function speedForScenario(title?: string): number {
-  const t = (title || '').toUpperCase();
-  // m/s (rough hackathon simulation)
-  if (t.includes('TRAUMA')) return 18;       // ~65 km/h
-  if (t.includes('ARREST') || t.includes('CARDIAC')) return 16; // ~58 km/h
-  return 12;                                 // ~43 km/h
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n));
 }
 
-export default function LiveMap({ activeScenario }: { activeScenario?: any }) {
+function formatEta(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const mm = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${mm}:${ss.toString().padStart(2, '0')}`;
+}
+
+function findIndexByCumTime(cumTime: number[], t: number): number {
+  // linear scan is fine at hackathon scale (<10k points)
+  let i = 1;
+  while (i < cumTime.length && cumTime[i] < t) i++;
+  return i;
+}
+
+function computeNavLive(meta: {
+  totalDist: number;
+  totalTime: number;
+  steps: NavStep[];
+  algorithm?: string;
+}, traveledM: number, simTimeS: number, simSpeedup: number): NavLive {
+  const remainingDist = Math.max(0, meta.totalDist - traveledM);
+  const etaRemaining = Math.max(0, meta.totalTime - simTimeS);
+
+  let currentStreet = '--';
+  let nextInstruction = 'Proceed';
+  let distanceToNext = 0;
+
+  const steps = meta.steps || [];
+  if (steps.length) {
+    const cur = steps.find((s) => traveledM >= s.start_distance_m && traveledM < s.end_distance_m) || steps[0];
+    currentStreet = cur?.street || '--';
+
+    const next =
+      steps.find((s) => s.maneuver !== 'depart' && s.start_distance_m > traveledM) ||
+      (remainingDist < 15 ? undefined : cur);
+
+    if (!next) {
+      nextInstruction = 'Arrive at destination';
+      distanceToNext = 0;
+    } else {
+      nextInstruction = next.instruction;
+      distanceToNext = Math.max(0, next.start_distance_m - traveledM);
+    }
+  }
+
+  return {
+    distance_to_next_m: distanceToNext,
+    next_instruction: nextInstruction,
+    current_street: currentStreet,
+    eta_remaining_s: etaRemaining,
+    remaining_distance_m: remainingDist,
+    algorithm: meta.algorithm,
+    total_distance_m: meta.totalDist,
+    total_time_s: meta.totalTime,
+    sim_speedup: simSpeedup,
+  };
+}
+
+export default function LiveMap({
+  activeScenario,
+  onNavUpdate,
+}: {
+  activeScenario?: any;
+  onNavUpdate?: (nav: NavLive) => void;
+}) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const ambulanceMarker = useRef<maplibregl.Marker | null>(null);
-  const markerElRef = useRef<HTMLDivElement | null>(null);
 
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([]);
   const [currentPos, setCurrentPos] = useState<[number, number] | null>(null);
@@ -73,13 +140,31 @@ export default function LiveMap({ activeScenario }: { activeScenario?: any }) {
 
   // Animation refs
   const animRef = useRef<number | null>(null);
-  const routeRef = useRef<{ coords: [number, number][], cum: number[] } | null>(null);
   const startTimeRef = useRef<number>(0);
   const followRef = useRef<boolean>(true);
   const scenarioRef = useRef<any>(null);
+  const onNavUpdateRef = useRef<typeof onNavUpdate>(onNavUpdate);
 
-  useEffect(() => { followRef.current = isFollowing; }, [isFollowing]);
-  useEffect(() => { scenarioRef.current = activeScenario; }, [activeScenario]);
+  // Route meta ref (provided by backend)
+  const routeRef = useRef<{
+    coords: [number, number][];
+    cumDist: number[];
+    cumTime: number[];
+    totalDist: number;
+    totalTime: number;
+    steps: NavStep[];
+    algorithm?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    followRef.current = isFollowing;
+  }, [isFollowing]);
+  useEffect(() => {
+    scenarioRef.current = activeScenario;
+  }, [activeScenario]);
+  useEffect(() => {
+    onNavUpdateRef.current = onNavUpdate;
+  }, [onNavUpdate]);
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
@@ -111,7 +196,6 @@ export default function LiveMap({ activeScenario }: { activeScenario?: any }) {
         transform: rotate(45deg);
       "></div>
     `;
-    markerElRef.current = el;
 
     ambulanceMarker.current = new maplibregl.Marker(el).setLngLat([-79.44, 43.86]).addTo(map.current);
 
@@ -132,6 +216,7 @@ export default function LiveMap({ activeScenario }: { activeScenario?: any }) {
       // Initial route (so the demo starts "alive")
       fetchRoute();
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Re-route on scenario change
@@ -164,8 +249,14 @@ export default function LiveMap({ activeScenario }: { activeScenario?: any }) {
       });
 
       const coords = (res.data?.path_coordinates || []) as [number, number][];
-      if (!coords.length) {
-        throw new Error('No route points returned from backend.');
+      const cumDist = (res.data?.cum_distance_m || []) as number[];
+      const cumTime = (res.data?.cum_time_s || []) as number[];
+      const totalDist = Number(res.data?.total_distance_m ?? (cumDist.length ? cumDist[cumDist.length - 1] : 0));
+      const totalTime = Number(res.data?.total_time_s ?? (cumTime.length ? cumTime[cumTime.length - 1] : 0));
+      const steps = (res.data?.steps || []) as NavStep[];
+
+      if (!coords.length || !cumDist.length || !cumTime.length) {
+        throw new Error('Route meta missing (coords/cumDist/cumTime). Check backend /calculate response.');
       }
 
       // Put the marker ON the road network (snapped) so it's not inside buildings.
@@ -177,6 +268,16 @@ export default function LiveMap({ activeScenario }: { activeScenario?: any }) {
       }
 
       setRouteCoordinates(coords);
+
+      routeRef.current = {
+        coords,
+        cumDist,
+        cumTime,
+        totalDist,
+        totalTime,
+        steps,
+        algorithm: res.data.algorithm,
+      };
 
       // Update route line
       const geojson = {
@@ -194,6 +295,16 @@ export default function LiveMap({ activeScenario }: { activeScenario?: any }) {
 
       // Immediately center the camera
       map.current?.jumpTo({ center: (snapped || coords[0]) as any });
+
+      // Push an initial nav state immediately
+      const simSpeedup = 8;
+      const initialNav = computeNavLive(
+        { totalDist, totalTime, steps, algorithm: res.data.algorithm },
+        0,
+        0,
+        simSpeedup
+      );
+      onNavUpdateRef.current?.(initialNav);
     } catch (e: any) {
       console.error('Route fetch failed', e);
       setRouteError(
@@ -227,7 +338,7 @@ export default function LiveMap({ activeScenario }: { activeScenario?: any }) {
     }
   };
 
-  // Smooth GPS-like animation (constant speed along the polyline)
+  // Realistic GPS-like animation: drive the marker using backend's cum_time_s (and a speedup factor for demo).
   useEffect(() => {
     if (!routeCoordinates.length) return;
 
@@ -237,44 +348,64 @@ export default function LiveMap({ activeScenario }: { activeScenario?: any }) {
       animRef.current = null;
     }
 
-    const coords = routeCoordinates;
-    const cum = buildCumulativeDistances(coords);
-    routeRef.current = { coords, cum };
+    const meta = routeRef.current;
+    if (!meta) return;
+
     startTimeRef.current = performance.now();
 
     // start at first point
-    setCurrentPos(coords[0]);
+    setCurrentPos(meta.coords[0]);
+
+    const SIM_SPEEDUP = 8; // demo speed multiplier: increases how fast the vehicle progresses along the real route timebase
 
     const tick = () => {
-      const meta = routeRef.current;
-      if (!meta || !ambulanceMarker.current || !map.current) return;
+      const m = routeRef.current;
+      if (!m || !ambulanceMarker.current || !map.current) return;
 
       const elapsedS = (performance.now() - startTimeRef.current) / 1000;
-      const speed = speedForScenario(scenarioRef.current?.title);
-      const dist = elapsedS * speed;
-      const total = meta.cum[meta.cum.length - 1];
+      const simTimeS = elapsedS * SIM_SPEEDUP;
+      const totalTime = m.totalTime || m.cumTime[m.cumTime.length - 1];
 
-      if (dist >= total) {
-        const end = meta.coords[meta.coords.length - 1];
+      if (simTimeS >= totalTime) {
+        const end = m.coords[m.coords.length - 1];
         ambulanceMarker.current.setLngLat(end);
         setCurrentPos(end);
+        // final nav push
+        const finalNav = computeNavLive(
+          { totalDist: m.totalDist, totalTime, steps: m.steps, algorithm: m.algorithm },
+          m.totalDist,
+          totalTime,
+          SIM_SPEEDUP
+        );
+        onNavUpdateRef.current?.(finalNav);
         return;
       }
 
-      // Find the segment index (linear scan with small step is fine at hackathon scale)
-      let i = 1;
-      while (i < meta.cum.length && meta.cum[i] < dist) i++;
+      const i = clamp(findIndexByCumTime(m.cumTime, simTimeS), 1, m.cumTime.length - 1);
+      const t0 = m.cumTime[i - 1];
+      const t1 = m.cumTime[i];
+      const frac = t1 === t0 ? 0 : (simTimeS - t0) / (t1 - t0);
 
-      const d0 = meta.cum[i - 1];
-      const d1 = meta.cum[i];
-      const t = d1 === d0 ? 0 : (dist - d0) / (d1 - d0);
-
-      const a = meta.coords[i - 1];
-      const b = meta.coords[i];
-      const pos: [number, number] = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+      const a = m.coords[i - 1];
+      const b = m.coords[i];
+      const pos: [number, number] = [a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac];
 
       ambulanceMarker.current.setLngLat(pos);
       setCurrentPos(pos);
+
+      // traveled distance for nav
+      const d0 = m.cumDist[i - 1];
+      const d1 = m.cumDist[i];
+      const traveledM = d0 + (d1 - d0) * frac;
+
+      // update nav panel via callback
+      const nav = computeNavLive(
+        { totalDist: m.totalDist, totalTime, steps: m.steps, algorithm: m.algorithm },
+        traveledM,
+        simTimeS,
+        SIM_SPEEDUP
+      );
+      onNavUpdateRef.current?.(nav);
 
       const brg = bearingDeg(a, b);
 
@@ -303,9 +434,13 @@ export default function LiveMap({ activeScenario }: { activeScenario?: any }) {
       <div ref={mapContainer} className="w-full h-full rounded-2xl overflow-hidden border border-white/10" />
 
       {/* HUD: MINIMAL CORNER OVERLAY */}
-      <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-xl p-3 rounded-lg border border-cyan-500/30 flex flex-col gap-1 min-w-[200px]">
+      <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-xl p-3 rounded-lg border border-cyan-500/30 flex flex-col gap-1 min-w-[220px]">
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${activeScenario?.isRedAlert ? 'bg-red-500 animate-pulse' : 'bg-cyan-400'}`} />
+          <div
+            className={`w-2 h-2 rounded-full ${
+              activeScenario?.isRedAlert ? 'bg-red-500 animate-pulse' : 'bg-cyan-400'
+            }`}
+          />
           <span className="text-cyan-400 text-[10px] font-mono font-bold uppercase tracking-tighter">
             {activeScenario?.title || 'SYSTEM IDLE'}
           </span>
@@ -313,11 +448,12 @@ export default function LiveMap({ activeScenario }: { activeScenario?: any }) {
         <div className="text-[9px] text-gray-500 font-mono">
           UNIT 992 // {currentPos ? `${currentPos[0].toFixed(5)}, ${currentPos[1].toFixed(5)}` : '--, --'}
         </div>
-        {routeError && (
-          <div className="text-[10px] text-red-300 font-mono mt-1 max-w-[260px]">
-            {routeError}
+        {routeRef.current?.totalDist != null && routeRef.current?.totalTime != null && (
+          <div className="text-[9px] text-gray-500 font-mono">
+            ROUTE // {(routeRef.current.totalDist / 1000).toFixed(2)} km // ETA {formatEta(routeRef.current.totalTime)}
           </div>
         )}
+        {routeError && <div className="text-[10px] text-red-300 font-mono mt-1 max-w-[300px]">{routeError}</div>}
       </div>
 
       {/* Destination input (demo) */}

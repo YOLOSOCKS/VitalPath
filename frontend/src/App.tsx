@@ -65,6 +65,7 @@ const EquipmentPanel = ({ forceOpen, isRedAlert }: { forceOpen?: boolean, isRedA
 function App() {
   const [isRedAlert, setIsRedAlert] = useState(false);
   const [activeScenario, setActiveScenario] = useState<any>(null);
+  const [navData, setNavData] = useState<any>(null);
   const [time, setTime] = useState(new Date());
   const [audioError, setAudioError] = useState(false);
   const aiRef = useRef<any>(null);
@@ -155,7 +156,7 @@ function App() {
 
         <div className="col-span-6 h-full relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black/20">
            {/* SYNC: Passing activeScenario to Map for 3D Driver View */}
-           <LiveMap activeScenario={activeScenario} />
+           <LiveMap activeScenario={activeScenario} onNavUpdate={setNavData} />
            <ScenarioInjector onInject={handleScenarioInject} />
            <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-black/80 to-transparent pointer-events-none" />
            <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
@@ -163,7 +164,7 @@ function App() {
 
         <div className="col-span-3 flex flex-col gap-4 h-full min-h-0">
           {/* SYNC: Passing activeScenario to Navigation for Turn-by-Turn */}
-          <Navigation className="h-1/3 shrink-0" activeScenario={activeScenario} />
+          <Navigation className="h-1/3 shrink-0" activeScenario={activeScenario} navData={navData} />
           <PatientVitals className="flex-1 min-h-0" scenarioData={activeScenario?.vitals} />
         </div>
       </main>

@@ -1,87 +1,207 @@
 import os
 import json
 import subprocess
-import networkx as nx
-import numpy as np
-import osmnx as ox
+import time
+import re
 from functools import lru_cache
+from typing import List, Tuple, Optional, Any, Dict
+
+import networkx as nx
+import osmnx as ox
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from typing import List, Tuple
-import time
+
 
 router = APIRouter()
 
-# --- 1) OSMnx configuration ---
-# We deliberately DO NOT download a massive region-wide graph at import time.
-# That makes the UI feel "dead" (GO does nothing) while Python blocks.
-# Instead we fetch a *small bbox corridor* around start/end and cache it.
+# --- OSMnx configuration ---
 ox.settings.use_cache = True
 ox.settings.cache_folder = os.path.join(os.path.dirname(__file__), "..", "..", "..", ".osmnx_cache")
 ox.settings.log_console = False
 
-
 AEGIS_ROUTE_ALGO = os.environ.get("AEGIS_ROUTE_ALGO", "dijkstra").lower()
 
 
+# -------------------------------
+# Models
+# -------------------------------
 class GeocodeResponse(BaseModel):
     lat: float
     lng: float
     display_name: str
 
+
 class Coordinate(BaseModel):
     lat: float
     lng: float
 
+
 class RouteRequest(BaseModel):
     start: Coordinate
     end: Coordinate
-    scenario_type: str = "ROUTINE"
+    scenario_type: str = "ROUTINE"  # ROUTINE / TRAUMA / CARDIAC ARREST etc.
+
 
 class PivotNode(BaseModel):
     id: str
     lat: float
     lng: float
-    type: str 
+    type: str
+
+
+class NavStep(BaseModel):
+    id: int
+    instruction: str
+    street: str
+    start_distance_m: float
+    end_distance_m: float
+    maneuver: str  # depart/continue/slight_left/left/right/uturn...
+
 
 class RouteResponse(BaseModel):
     algorithm: str
     destination: str
     execution_time_ms: float
     pivots_identified: List[PivotNode]
-    path_coordinates: List[List[float]] # [lng, lat]
-    snapped_start: List[float] # [lng, lat]
-    snapped_end: List[float]   # [lng, lat]
+
+    # Polyline for the frontend (lon/lat)
+    path_coordinates: List[List[float]]  # [lng, lat]
+    snapped_start: List[float]  # [lng, lat]
+    snapped_end: List[float]  # [lng, lat]
+
+    # "Real" navigation values derived from the route
+    total_distance_m: float
+    total_time_s: float
+    cum_distance_m: List[float]  # same length as path_coordinates
+    cum_time_s: List[float]  # same length as path_coordinates
+    steps: List[NavStep]
+
     narrative: List[str]
 
-# --- 2. THE DUAN-MAO HEURISTIC ---
-def find_duan_mao_pivots(G, path_nodes: List[int], k: int = 2) -> List[PivotNode]:
-    """
-    Identifies 'Pivots' within the shortest path. 
-    Duan-Mao (2025) defines pivots as nodes with high out-degree that act 
-    as gateways in the directed frontier.
-    """
-    pivots = []
+
+# -------------------------------
+# Helpers
+# -------------------------------
+def _haversine_m(a: Tuple[float, float], b: Tuple[float, float]) -> float:
+    """a,b are (lng, lat) in degrees; returns meters."""
+    lng1, lat1 = a
+    lng2, lat2 = b
+    r = 6371000.0
+    phi1 = lat1 * 3.141592653589793 / 180.0
+    phi2 = lat2 * 3.141592653589793 / 180.0
+    dphi = (lat2 - lat1) * 3.141592653589793 / 180.0
+    dlmb = (lng2 - lng1) * 3.141592653589793 / 180.0
+    s = (pow((__import__("math").sin(dphi / 2.0)), 2.0)
+         + __import__("math").cos(phi1) * __import__("math").cos(phi2) * pow((__import__("math").sin(dlmb / 2.0)), 2.0))
+    return 2.0 * r * __import__("math").asin(min(1.0, __import__("math").sqrt(s)))
+
+
+def _bearing_deg(a: Tuple[float, float], b: Tuple[float, float]) -> float:
+    """Rough bearing in degrees (0=north, 90=east)."""
+    lng1, lat1 = a
+    lng2, lat2 = b
+    d_lng = (lng2 - lng1)
+    d_lat = (lat2 - lat1)
+    ang = __import__("math").atan2(d_lng, d_lat) * 180.0 / 3.141592653589793
+    # normalize 0..360
+    ang = (ang + 360.0) % 360.0
+    return ang
+
+
+def _angle_diff_deg(a2: float, a1: float) -> float:
+    """Return signed smallest difference a2-a1 in range [-180, 180]."""
+    d = (a2 - a1 + 540.0) % 360.0 - 180.0
+    return d
+
+
+def _pick_first_str(v: Any) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, (list, tuple)) and v:
+        for item in v:
+            if isinstance(item, str) and item.strip():
+                return item
+    return str(v)
+
+
+def _parse_maxspeed_kph(v: Any) -> Optional[float]:
+    """Parse OSM maxspeed into km/h if possible."""
+    if v is None:
+        return None
+    if isinstance(v, (list, tuple)):
+        for item in v:
+            ms = _parse_maxspeed_kph(item)
+            if ms is not None:
+                return ms
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip().lower()
+    # common forms: "50", "50 km/h", "30 mph", "signals", etc.
+    m = re.search(r"(\d+(?:\.\d+)?)", s)
+    if not m:
+        return None
+    val = float(m.group(1))
+    if "mph" in s:
+        return val * 1.60934
+    return val
+
+
+def _default_speed_kph(highway: Any) -> float:
+    """Fallback speeds when OSM doesn't provide maxspeed."""
+    h = _pick_first_str(highway).lower()
+    # crude but defensible for a demo
+    if "motorway" in h:
+        return 100.0
+    if "trunk" in h:
+        return 80.0
+    if "primary" in h:
+        return 70.0
+    if "secondary" in h:
+        return 60.0
+    if "tertiary" in h:
+        return 55.0
+    if "residential" in h:
+        return 40.0
+    if "service" in h:
+        return 25.0
+    return 50.0
+
+
+def _scenario_speed_multiplier(s: str) -> float:
+    """Optional speed profile multiplier for the sim (keeps one-way / drivable constraints real)."""
+    t = (s or "").upper()
+    if "ARREST" in t or "CARDIAC" in t:
+        return 1.10
+    if "TRAUMA" in t:
+        return 1.05
+    return 1.00
+
+
+# -------------------------------
+# Duan–Mao pivot heuristic (demo)
+# -------------------------------
+def find_duan_mao_pivots(G: nx.MultiDiGraph, path_nodes: List[int], k: int = 2) -> List[PivotNode]:
+    pivots: List[PivotNode] = []
     for node in path_nodes:
-        if G.out_degree(node) >= 3: # Intersection nodes
+        if G.out_degree(node) >= 3:
             data = G.nodes[node]
-            # Graph is unprojected -> nodes store lon/lat in x/y
-            pivots.append(PivotNode(
-                id=str(node), 
-                lat=float(data['y']), 
-                lng=float(data['x']), 
-                type="Pivot-Relaxed"
-            ))
-            if len(pivots) >= k: break
+            pivots.append(
+                PivotNode(
+                    id=str(node),
+                    lat=float(data["y"]),
+                    lng=float(data["x"]),
+                    type="Pivot-Relaxed",
+                )
+            )
+            if len(pivots) >= k:
+                break
     return pivots
 
 
 def _bbox_for_route(start: Coordinate, end: Coordinate, pad_deg: float = 0.02):
-    """Compute a bbox corridor around start/end.
-
-    pad_deg is a rough degree padding (~2km north/south in York Region latitude).
-    We keep it simple for hackathon speed.
-    """
     north = max(start.lat, end.lat) + pad_deg
     south = min(start.lat, end.lat) - pad_deg
     east = max(start.lng, end.lng) + pad_deg
@@ -90,15 +210,13 @@ def _bbox_for_route(start: Coordinate, end: Coordinate, pad_deg: float = 0.02):
 
 
 def _round_bbox(north: float, south: float, east: float, west: float, digits: int = 3):
-    """Round bbox to stabilize cache keys."""
     return (round(north, digits), round(south, digits), round(east, digits), round(west, digits))
 
 
 @lru_cache(maxsize=16)
 def _load_graph_cached(north: float, south: float, east: float, west: float) -> nx.MultiDiGraph:
     """Load a drive network for the bbox (cached)."""
-    # Keep it unprojected so geometry is lon/lat.
-    bbox = (west, south, east, north)  # (left, bottom, right, top)
+    bbox = (west, south, east, north)  # (left, bottom, right, top) for OSMnx v2
     G = ox.graph_from_bbox(bbox, network_type="drive", simplify=True)
     return G
 
@@ -109,16 +227,11 @@ def _edge_list_from_graph(G: nx.MultiDiGraph):
     edges: List[List[float]] = []
     for u, v, k, data in G.edges(keys=True, data=True):
         w = float(data.get("length", 1.0))
-        # Directed edges are preserved (one-ways) via MultiDiGraph
         edges.append([idx[u], idx[v], w])
     return nodes, idx, edges
 
 
 def _bmsssp_path(G: nx.MultiDiGraph, source_node: int, target_node: int) -> List[int]:
-    """Compute path using a Duan–Mao BM-SSSP implementation via a Node runner.
-
-    Falls back to networkx if Node runner isn't available.
-    """
     nodes, idx, edges = _edge_list_from_graph(G)
     if source_node not in idx or target_node not in idx:
         raise RuntimeError("source/target not in subgraph")
@@ -133,7 +246,7 @@ def _bmsssp_path(G: nx.MultiDiGraph, source_node: int, target_node: int) -> List
 
     runner = os.environ.get(
         "BMSSSP_RUNNER",
-        os.path.join(os.path.dirname(__file__), "..", "..", "bmsssp-runner", "run.mjs"),
+        os.path.join(os.path.dirname(__file__), "..", "..", "bmssp-runner", "run.mjs"),
     )
     runner = os.path.abspath(runner)
 
@@ -154,8 +267,8 @@ def _bmsssp_path(G: nx.MultiDiGraph, source_node: int, target_node: int) -> List
         src_i = payload["source"]
         dst_i = payload["target"]
 
-        # Reconstruct path from predecessors (dst -> src)
-        path_idx = []
+        # Reconstruct path (dst -> src)
+        path_idx: List[int] = []
         cur = dst_i
         seen = set()
         while cur != -1 and cur not in seen:
@@ -171,83 +284,275 @@ def _bmsssp_path(G: nx.MultiDiGraph, source_node: int, target_node: int) -> List
         path_idx.reverse()
         return [nodes[i] for i in path_idx]
 
-    except Exception as e:
+    except Exception:
         # fallback
         return nx.shortest_path(G, source_node, target_node, weight="length")
 
 
-def _route_coordinates(G: nx.MultiDiGraph, path_nodes: List[int]) -> List[List[float]]:
-    """Expand node path into dense polyline using edge geometry."""
+def _route_polyline_and_edges(G: nx.MultiDiGraph, path_nodes: List[int], scenario_type: str) -> Tuple[List[List[float]], List[Dict[str, Any]]]:
+    """Expand node path into a dense polyline using edge geometry.
+    Also returns per-edge spans (start/end point indices) and metadata for steps/ETA.
+    """
     route_coords: List[List[float]] = []
+    edges_meta: List[Dict[str, Any]] = []
+    mult = _scenario_speed_multiplier(scenario_type)
+
     for u, v in zip(path_nodes[:-1], path_nodes[1:]):
         edge_dict = G.get_edge_data(u, v)
         if not edge_dict:
             continue
+
         # pick the shortest parallel edge if multiple exist
         best_key = min(edge_dict.keys(), key=lambda kk: float(edge_dict[kk].get("length", 1e18)))
         edge_data = edge_dict[best_key]
 
+        name = _pick_first_str(edge_data.get("name")) or _pick_first_str(edge_data.get("ref")) or "Unnamed Road"
+        highway = edge_data.get("highway")
+        maxspeed = _parse_maxspeed_kph(edge_data.get("maxspeed"))
+        speed_kph = (maxspeed if maxspeed is not None else _default_speed_kph(highway)) * mult
+
+        # span starts at the previous last coord if we already have points
+        span_start = len(route_coords) - 1 if route_coords else 0
+
         if "geometry" in edge_data and edge_data["geometry"] is not None:
             x, y = edge_data["geometry"].xy
             pts = list(zip(x, y))
-            # Avoid duplicating points between segments
             if route_coords and pts:
-                pts = pts[1:]
+                pts = pts[1:]  # avoid duplication
             for lon, lat in pts:
                 route_coords.append([float(lon), float(lat)])
         else:
-            # straight line fallback
             if not route_coords:
                 route_coords.append([float(G.nodes[u]["x"]), float(G.nodes[u]["y"])])
             route_coords.append([float(G.nodes[v]["x"]), float(G.nodes[v]["y"])])
-    return route_coords
+
+        span_end = len(route_coords) - 1
+
+        # bearing uses the first segment of this edge span
+        if span_end > span_start:
+            a = (route_coords[span_start][0], route_coords[span_start][1])
+            b_idx = span_start + 1
+            b = (route_coords[b_idx][0], route_coords[b_idx][1])
+            brg = _bearing_deg(a, b)
+        else:
+            brg = 0.0
+
+        edges_meta.append(
+            {
+                "u": u,
+                "v": v,
+                "name": name,
+                "highway": highway,
+                "speed_kph": float(speed_kph),
+                "span_start": int(span_start),
+                "span_end": int(span_end),
+                "bearing": float(brg),
+            }
+        )
+
+    return route_coords, edges_meta
 
 
+def _build_cum_distance(coords: List[List[float]]) -> List[float]:
+    if not coords:
+        return []
+    cum = [0.0] * len(coords)
+    for i in range(1, len(coords)):
+        cum[i] = cum[i - 1] + _haversine_m((coords[i - 1][0], coords[i - 1][1]), (coords[i][0], coords[i][1]))
+    return cum
+
+
+def _build_cum_time(coords: List[List[float]], cum_dist: List[float], edges_meta: List[Dict[str, Any]]) -> List[float]:
+    """Distribute per-edge travel times across polyline points."""
+    if not coords:
+        return []
+    cum_time = [0.0] * len(coords)
+
+    for em in edges_meta:
+        s = em["span_start"]
+        e = em["span_end"]
+        if e <= s:
+            continue
+        seg_dist = max(0.0, cum_dist[e] - cum_dist[s])
+        speed_mps = max(0.1, (float(em["speed_kph"]) / 3.6))
+        seg_time = seg_dist / speed_mps
+
+        t0 = cum_time[s]
+        # fill times on this edge proportionally to distance
+        for i in range(s + 1, e + 1):
+            dd = cum_dist[i] - cum_dist[s]
+            frac = 0.0 if seg_dist <= 0 else (dd / seg_dist)
+            cum_time[i] = t0 + seg_time * frac
+
+    # Ensure monotonicity (floating point noise)
+    for i in range(1, len(cum_time)):
+        if cum_time[i] < cum_time[i - 1]:
+            cum_time[i] = cum_time[i - 1]
+    return cum_time
+
+
+def _classify_maneuver(delta: float) -> str:
+    ad = abs(delta)
+    if ad < 20:
+        return "continue"
+    if ad < 60:
+        return "slight_right" if delta > 0 else "slight_left"
+    if ad < 135:
+        return "right" if delta > 0 else "left"
+    return "uturn"
+
+
+def _instruction_for(maneuver: str, street: str) -> str:
+    st = street or "the road"
+    if maneuver == "depart":
+        return f"Head on {st}"
+    if maneuver == "continue":
+        return f"Continue on {st}"
+    if maneuver == "slight_right":
+        return f"Slight right onto {st}"
+    if maneuver == "slight_left":
+        return f"Slight left onto {st}"
+    if maneuver == "right":
+        return f"Turn right onto {st}"
+    if maneuver == "left":
+        return f"Turn left onto {st}"
+    if maneuver == "uturn":
+        return f"Make a U-turn to stay on {st}"
+    return f"Continue on {st}"
+
+
+def _build_steps(edges_meta: List[Dict[str, Any]], cum_dist: List[float]) -> List[NavStep]:
+    """Create turn-by-turn steps from edge spans (hackathon-grade but real)."""
+    if not edges_meta or not cum_dist:
+        return []
+
+    steps: List[NavStep] = []
+
+    # First step starts at edge 0 and is a "depart"
+    step_start_edge = 0
+    step_maneuver = "depart"
+    step_delta = 0.0  # not used for depart
+
+    def finalize_step(end_edge_idx: int, maneuver: str):
+        nonlocal steps, step_start_edge
+        first = edges_meta[step_start_edge]
+        last = edges_meta[end_edge_idx]
+        s_idx = int(first["span_start"])
+        e_idx = int(last["span_end"])
+        start_m = float(cum_dist[s_idx]) if s_idx < len(cum_dist) else 0.0
+        end_m = float(cum_dist[e_idx]) if e_idx < len(cum_dist) else start_m
+        street = str(first.get("name") or "Unnamed Road")
+        instruction = _instruction_for(maneuver, street)
+        steps.append(
+            NavStep(
+                id=len(steps),
+                instruction=instruction,
+                street=street,
+                start_distance_m=round(start_m, 2),
+                end_distance_m=round(end_m, 2),
+                maneuver=maneuver,
+            )
+        )
+
+    # boundary when name changes or turn angle big enough
+    for i in range(1, len(edges_meta)):
+        prev = edges_meta[i - 1]
+        cur = edges_meta[i]
+        delta = _angle_diff_deg(float(cur["bearing"]), float(prev["bearing"]))
+        name_change = str(cur.get("name")) != str(prev.get("name"))
+        big_turn = abs(delta) >= 35.0
+
+        if name_change or big_turn:
+            # finalize previous step up to i-1
+            finalize_step(i - 1, step_maneuver)
+
+            # start new step at i
+            step_start_edge = i
+            step_maneuver = _classify_maneuver(delta)
+
+    # finalize last
+    finalize_step(len(edges_meta) - 1, step_maneuver)
+
+    # Optional: merge tiny steps (noise)
+    merged: List[NavStep] = []
+    for st in steps:
+        if not merged:
+            merged.append(st)
+            continue
+        prev = merged[-1]
+        # merge if same street and very small segment
+        if st.street == prev.street and (st.end_distance_m - st.start_distance_m) < 30:
+            prev.end_distance_m = st.end_distance_m
+        else:
+            merged.append(st)
+
+    # Re-assign ids
+    for j, st in enumerate(merged):
+        st.id = j
+    return merged
+
+
+# -------------------------------
+# Endpoints
+# -------------------------------
 @router.get("/geocode", response_model=GeocodeResponse)
 async def geocode(q: str = Query(..., min_length=3)):
-    """Geocode an address/POI string to lat/lng for the demo."""
     try:
         lat, lng = ox.geocode(q)
         return GeocodeResponse(lat=float(lat), lng=float(lng), display_name=q)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Geocode failed: {str(e)}")
 
+
 @router.post("/calculate", response_model=RouteResponse)
 async def calculate_route(req: RouteRequest):
     start_time = time.time()
-    
+
     try:
-        # 1) Fetch a small, cached road graph corridor (fast + doesn't block startup)
+        # 1) Graph corridor
         north, south, east, west = _bbox_for_route(req.start, req.end)
         north, south, east, west = _round_bbox(north, south, east, west)
         G = _load_graph_cached(north, south, east, west)
 
-        # 2) Snap GPS to nearest road nodes (uses OSM one-ways / driveable roads)
+        # 2) Snap to nearest drivable nodes (requires scikit-learn for unprojected graphs)
         orig_node = ox.nearest_nodes(G, X=req.start.lng, Y=req.start.lat)
         dest_node = ox.nearest_nodes(G, X=req.end.lng, Y=req.end.lat)
 
-        # 3) Compute shortest path
-        #    - dijkstra: networkx baseline (real)
-        #    - bmsssp: calls a Duan–Mao BM-SSSP implementation via Node runner (real)
+        # 3) Shortest path
         if AEGIS_ROUTE_ALGO == "bmsssp":
-            path = _bmsssp_path(G, orig_node, dest_node)
+            path_nodes = _bmsssp_path(G, orig_node, dest_node)
             algo_label = "BM-SSSP (Duan–Mao et al. 2025) // OSM"
         else:
-            path = nx.shortest_path(G, orig_node, dest_node, weight="length")
+            path_nodes = nx.shortest_path(G, orig_node, dest_node, weight="length")
             algo_label = "Dijkstra (networkx) // OSM"
 
-        # 4) Expand into dense polyline so the marker follows roads (not straight lines)
-        route_coords = _route_coordinates(G, path)
+        # 4) Polyline + edge metadata
+        route_coords, edges_meta = _route_polyline_and_edges(G, path_nodes, req.scenario_type)
+        if not route_coords:
+            raise RuntimeError("No route points produced.")
 
-        # Marker should start/end snapped to the road network (not inside buildings)
+        # 5) Distances & ETA timeline
+        cum_dist = _build_cum_distance(route_coords)
+        cum_time = _build_cum_time(route_coords, cum_dist, edges_meta)
+        total_dist = float(cum_dist[-1]) if cum_dist else 0.0
+        total_time = float(cum_time[-1]) if cum_time else 0.0
+
+        # 6) Steps
+        steps = _build_steps(edges_meta, cum_dist)
+
+        # 7) Pivots (demo heuristic)
+        pivots = find_duan_mao_pivots(G, path_nodes)
+
+        # Marker should start/end snapped to the road network
         snapped_start = [float(G.nodes[orig_node]["x"]), float(G.nodes[orig_node]["y"])]
         snapped_end = [float(G.nodes[dest_node]["x"]), float(G.nodes[dest_node]["y"])]
 
-        # 4. RUN HEURISTIC
-        pivots = find_duan_mao_pivots(G, path)
-        
-        dest_name = "MACKENZIE HEALTH" if "ARREST" in req.scenario_type else "SCENE RE-ROUTE"
-        exec_ms = (time.time() - start_time) * 1000
+        exec_ms = (time.time() - start_time) * 1000.0
+
+        # For demo labeling only
+        dest_name = "MACKENZIE HEALTH" if "ARREST" in (req.scenario_type or "").upper() else "SCENE RE-ROUTE"
+
+        mult = _scenario_speed_multiplier(req.scenario_type)
 
         return RouteResponse(
             algorithm=algo_label,
@@ -257,11 +562,16 @@ async def calculate_route(req: RouteRequest):
             path_coordinates=route_coords,
             snapped_start=snapped_start,
             snapped_end=snapped_end,
+            total_distance_m=round(total_dist, 2),
+            total_time_s=round(total_time, 2),
+            cum_distance_m=[round(x, 3) for x in cum_dist],
+            cum_time_s=[round(t, 3) for t in cum_time],
+            steps=steps,
             narrative=[
                 "Mission parameters uploaded to Nav-Com.",
                 f"Optimized path found in {round(exec_ms, 2)}ms.",
-                "Pivots identified to bypass traffic relaxation zones."
-            ]
+                f"Speed profile multiplier: x{mult:.2f} (scenario={req.scenario_type}).",
+            ],
         )
 
     except Exception as e:
