@@ -225,7 +225,7 @@ export default function LiveMap({
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-      center: [-79.2578, 43.8334],  // Markham Stouffville Hospital
+      center: [-79.311760971958, 43.85421582751821],  // 1 University Blvd, Markham
       zoom: 16,
       pitch: 70,
     });
@@ -263,7 +263,7 @@ export default function LiveMap({
       </svg>
     `;
 
-    ambulanceMarker.current = new maplibregl.Marker({ element: el }).setLngLat([-79.2578, 43.8334]).addTo(map.current);  // Markham Stouffville Hospital
+    ambulanceMarker.current = new maplibregl.Marker({ element: el }).setLngLat([-79.311760971958, 43.85421582751821]).addTo(map.current);  // 1 University Blvd, Markham
 
     map.current.on('load', () => {
       map.current?.addSource('aegis-route', {
@@ -343,7 +343,7 @@ export default function LiveMap({
       }
 
       const cur = ambulanceMarker.current?.getLngLat();
-      const start = cur ? { lat: cur.lat, lng: cur.lng } : { lat: 43.8334, lng: -79.2578 };  // Markham Stouffville Hospital
+      const start = cur ? { lat: cur.lat, lng: cur.lng } : { lat: 43.85421582751821, lng: -79.311760971958 };  // 1 University Blvd, Markham
 
       // Create abort controller for this route request
       if (routeAbortRef.current) routeAbortRef.current.abort();
@@ -506,7 +506,7 @@ export default function LiveMap({
   const fetchBothAlgoStats = async () => {
     setIsFetchingStats(true);
     const cur = ambulanceMarker.current?.getLngLat();
-    const start = cur ? { lat: cur.lat, lng: cur.lng } : { lat: 43.8334, lng: -79.2578 };
+    const start = cur ? { lat: cur.lat, lng: cur.lng } : { lat: 43.85421582751821, lng: -79.311760971958 };  // 1 University Blvd, Markham
     const body = {
       start,
       end: endPoint,
@@ -885,8 +885,8 @@ export default function LiveMap({
                     key={key}
                     onClick={() => onScenarioInject?.(data)}
                     className={`w-full text-left px-3 py-2 text-[10px] font-mono font-bold rounded-lg border transition-all duration-300 hover:scale-[1.02] active:scale-95 ${data.isRedAlert
-                        ? 'border-red-500/40 text-red-500 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_rgba(239,68,68,0.15)]'
-                        : 'border-cyan-500/40 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500 hover:text-white shadow-[0_0_15px_rgba(0,240,255,0.15)]'
+                      ? 'border-red-500/40 text-red-500 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_rgba(239,68,68,0.15)]'
+                      : 'border-cyan-500/40 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500 hover:text-white shadow-[0_0_15px_rgba(0,240,255,0.15)]'
                       }`}
                   >
                     {key.replace(/_/g, ' ')}
