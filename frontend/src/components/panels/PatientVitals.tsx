@@ -101,102 +101,23 @@ export default function PatientVitals({ className, scenarioData }: { className?:
         </div>
       </div>
 
-      {/* Bottom split: ECG Graph + Hospital Triage */}
-      <div className="flex-1 min-h-[120px] flex flex-col gap-2">
-        {/* ECG Graph Visualization (left half) */}
-        <div className="flex-1 bg-black/50 rounded border border-white/10 relative overflow-hidden flex items-center">
-          <div className="absolute inset-0 opacity-20"
-            style={{ backgroundImage: 'linear-gradient(#00f0ff 1px, transparent 1px), linear-gradient(90deg, #00f0ff 1px, transparent 1px)', backgroundSize: '10px 10px' }}>
-          </div>
-
-          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <polyline
-              points={ecgData.map((y, x) => `${(x / 50) * 100},${y}`).join(' ')}
-              fill="none"
-              stroke={hr === 0 ? "#ff0000" : "#00f0ff"}
-              strokeWidth="2"
-              vectorEffect="non-scaling-stroke"
-              className="drop-shadow-[0_0_5px_rgba(0,240,255,0.8)]"
-            />
-          </svg>
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/10 to-transparent w-full h-full animate-scan" />
+      {/* ECG Graph Visualization */}
+      <div className="flex-1 min-h-[120px] bg-black/50 rounded border border-white/10 relative overflow-hidden flex items-center">
+        <div className="absolute inset-0 opacity-20"
+          style={{ backgroundImage: 'linear-gradient(#00f0ff 1px, transparent 1px), linear-gradient(90deg, #00f0ff 1px, transparent 1px)', backgroundSize: '10px 10px' }}>
         </div>
 
-        {/* Hospital Triage Panel (right half) */}
-        <div className="flex-1 bg-black/50 rounded border border-white/10 relative overflow-hidden flex flex-col p-2.5">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-white/5">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-emerald-400 font-mono font-bold tracking-wider uppercase">🏥 Hospital Information</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
-              <span className="text-[8px] text-gray-500 font-mono">LIVE</span>
-            </div>
-          </div>
-
-          {/* Stats Grid */}
-          <div className="flex-1 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[9px] font-mono content-start">
-            {/* Bed Capacity */}
-            <div className="text-gray-500 uppercase">Beds</div>
-            <div className="text-right">
-              <span className="text-yellow-400 font-bold">231</span>
-              <span className="text-gray-600"> / 280</span>
-            </div>
-
-            {/* ER Wait */}
-            <div className="text-gray-500 uppercase">ER Wait</div>
-            <div className="text-right">
-              <span className="text-orange-400 font-bold">47 min</span>
-            </div>
-
-            {/* Trauma Bays */}
-            <div className="text-gray-500 uppercase">Trauma Bays</div>
-            <div className="text-right">
-              <span className="text-emerald-400 font-bold">2</span>
-              <span className="text-gray-600"> / 4 open</span>
-            </div>
-
-            {/* ICU Beds */}
-            <div className="text-gray-500 uppercase">ICU Beds</div>
-            <div className="text-right">
-              <span className="text-red-400 font-bold">18</span>
-              <span className="text-gray-600"> / 20</span>
-            </div>
-
-            {/* OR Status */}
-            <div className="text-gray-500 uppercase">OR Active</div>
-            <div className="text-right">
-              <span className="text-cyan-400 font-bold">3</span>
-              <span className="text-gray-600"> / 6</span>
-            </div>
-
-            {/* Staff on Duty */}
-            <div className="text-gray-500 uppercase">Staff</div>
-            <div className="text-right">
-              <span className="text-purple-400 font-bold">84</span>
-              <span className="text-gray-600"> on duty</span>
-            </div>
-
-            {/* Ambulance ETA Queue */}
-            <div className="text-gray-500 uppercase">EMS Queue</div>
-            <div className="text-right">
-              <span className="text-yellow-300 font-bold">2</span>
-              <span className="text-gray-600"> inbound</span>
-            </div>
-
-            {/* Diversion Status */}
-            <div className="text-gray-500 uppercase">Diversion</div>
-            <div className="text-right">
-              <span className="text-emerald-400 font-bold">OPEN</span>
-            </div>
-          </div>
-
-          {/* Hospital name footer */}
-          <div className="mt-1.5 pt-1 border-t border-white/5 text-center">
-            <span className="text-[7px] text-gray-600 font-mono tracking-wider">MARKHAM STOUFFVILLE HOSPITAL // PARENT UNIT</span>
-          </div>
-        </div>
+        <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <polyline
+            points={ecgData.map((y, x) => `${(x / 50) * 100},${y}`).join(' ')}
+            fill="none"
+            stroke={hr === 0 ? "#ff0000" : "#00f0ff"}
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+            className="drop-shadow-[0_0_5px_rgba(0,240,255,0.8)]"
+          />
+        </svg>
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/10 to-transparent w-full h-full animate-scan" />
       </div>
     </div>
   );
