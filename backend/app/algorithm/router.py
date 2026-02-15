@@ -2,6 +2,8 @@ import asyncio
 import os
 import json
 import subprocess
+import threading
+import random
 import time
 import re
 from functools import lru_cache
@@ -26,6 +28,11 @@ AEGIS_ROUTE_ALGO = os.environ.get("AEGIS_ROUTE_ALGO", "dijkstra").lower()
 MSH_LAT = 43.8335
 MSH_LNG = -79.2630
 _MSH_MATCH_THRESHOLD_DEG = 0.002  # ~200 m tolerance for coordinate matching
+
+# Payload / visualization caps (keeps AlgoRace responsive)
+AEGIS_MAX_EXPLORATION_SEGS = int(os.environ.get("AEGIS_MAX_EXPLORATION_SEGS", "2500"))
+AEGIS_MAX_NETWORK_SEGS = int(os.environ.get("AEGIS_MAX_NETWORK_SEGS", "2200"))
+AEGIS_COORD_ROUND_DIGITS = int(os.environ.get("AEGIS_COORD_ROUND_DIGITS", "6"))
 
 
 # -------------------------------
@@ -80,7 +87,15 @@ class NavStep(BaseModel):
 class RouteResponse(BaseModel):
     algorithm: str
     destination: str
+
+    # execution_time_ms is kept for frontend compatibility, but it now represents the
+    # *pathfinding* time only (graph download/snap are excluded).
     execution_time_ms: float
+
+    # Optional extra timings for debugging / demos.
+    algorithm_time_ms: Optional[float] = None
+    total_time_ms: Optional[float] = None
+
     pivots_identified: List[PivotNode]
 
     # Polyline for the frontend (lon/lat)
@@ -99,6 +114,10 @@ class RouteResponse(BaseModel):
 
     # Optional: edges explored during search (for mini-map visualization)
     explored_coords: Optional[List[List[List[float]]]] = None  # [[[lng,lat],[lng,lat]], ...]
+    explored_count: Optional[int] = None
+
+    # Optional: faint background network segments (helps the minimap look like "streets").
+    network_edges_coords: Optional[List[List[List[float]]]] = None
 
 
 # -------------------------------
@@ -135,6 +154,54 @@ def _angle_diff_deg(a2: float, a1: float) -> float:
     d = (a2 - a1 + 540.0) % 360.0 - 180.0
     return d
 
+
+def _round_segments(segs: Optional[List[List[List[float]]]], digits: int = AEGIS_COORD_ROUND_DIGITS) -> Optional[List[List[List[float]]]]:
+    if segs is None:
+        return None
+    out: List[List[List[float]]] = []
+    for seg in segs:
+        if not seg or len(seg) < 2:
+            continue
+        (x1, y1), (x2, y2) = seg[0], seg[1]
+        out.append([[round(float(x1), digits), round(float(y1), digits)], [round(float(x2), digits), round(float(y2), digits)]])
+    return out
+
+def _downsample_segments(segs: Optional[List[List[List[float]]]], max_n: int) -> Optional[List[List[List[float]]]]:
+    if segs is None:
+        return None
+    n = len(segs)
+    if n <= max_n:
+        return segs
+    step = n / float(max_n)
+    out: List[List[List[float]]] = []
+    t = 0.0
+    while len(out) < max_n:
+        idx = int(t)
+        if idx >= n:
+            break
+        out.append(segs[idx])
+        t += step
+    return out
+
+def _sample_graph_edge_segments(G: nx.MultiDiGraph, max_n: int = AEGIS_MAX_NETWORK_SEGS) -> List[List[List[float]]]:
+    """Reservoir-sample edge segments so we can draw a faint street network in the minimap without huge payloads."""
+    sample: List[List[List[float]]] = []
+    seen = 0
+    for u, v, k in G.edges(keys=True):
+        try:
+            ux, uy = float(G.nodes[u]["x"]), float(G.nodes[u]["y"])
+            vx, vy = float(G.nodes[v]["x"]), float(G.nodes[v]["y"])
+        except Exception:
+            continue
+        seg = [[ux, uy], [vx, vy]]
+        seen += 1
+        if len(sample) < max_n:
+            sample.append(seg)
+        else:
+            j = random.randint(0, seen - 1)
+            if j < max_n:
+                sample[j] = seg
+    return sample
 
 def _pick_first_str(v: Any) -> str:
     if v is None:
@@ -407,6 +474,96 @@ def _dijkstra_with_exploration(G: nx.MultiDiGraph, source_node: int, target_node
     path.reverse()
     return path, explored_edges
 
+# -------------------------------
+# BM-SSSP runner (Node)
+# -------------------------------
+
+_BMSSSP_RUNNER: Optional["_BmSsspServerRunner"] = None
+_BMSSSP_RUNNER_INIT_LOCK = threading.Lock()
+
+
+def _readline_with_timeout(pipe, timeout_s: float) -> str:
+    out: List[str] = []
+    def _target():
+        try:
+            out.append(pipe.readline())
+        except Exception:
+            out.append("")
+
+    t = threading.Thread(target=_target, daemon=True)
+    t.start()
+    t.join(timeout_s)
+    if not out:
+        raise TimeoutError("bmsssp runner timed out")
+    return out[0]
+
+
+class _BmSsspServerRunner:
+    """Keeps a single Node process alive and sends newline-delimited JSON requests.
+
+    This removes per-call Node startup + module import overhead, which otherwise dwarfs
+    the algo time for small-ish route graphs.
+    """
+
+    def __init__(self, server_path: str):
+        self.server_path = server_path
+        self.proc = subprocess.Popen(
+            ["node", self.server_path],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+        self.lock = threading.Lock()
+
+    def call(self, payload: Dict[str, Any], timeout_s: float = 20.0) -> Dict[str, Any]:
+        if self.proc.poll() is not None:
+            raise RuntimeError("bmsssp runner not running")
+        assert self.proc.stdin is not None and self.proc.stdout is not None
+        with self.lock:
+            self.proc.stdin.write(json.dumps(payload) + "\n")
+            self.proc.stdin.flush()
+            line = _readline_with_timeout(self.proc.stdout, timeout_s).strip()
+            if not line:
+                # try to surface stderr for debugging
+                err = ""
+                try:
+                    if self.proc.stderr is not None:
+                        err = self.proc.stderr.read()
+                except Exception:
+                    pass
+                raise RuntimeError(f"bmsssp runner returned empty output. stderr={err[:400]}")
+            return json.loads(line)
+
+
+def _get_bmsssp_runner() -> Optional["_BmSsspServerRunner"]:
+    global _BMSSSP_RUNNER
+    if os.environ.get("BMSSSP_USE_SERVER", "1") in ("0", "false", "False"):
+        return None
+
+    if _BMSSSP_RUNNER is not None:
+        return _BMSSSP_RUNNER
+
+    with _BMSSSP_RUNNER_INIT_LOCK:
+        if _BMSSSP_RUNNER is not None:
+            return _BMSSSP_RUNNER
+
+        server_path = os.environ.get(
+            "BMSSSP_SERVER",
+            os.path.join(os.path.dirname(__file__), "..", "..", "bmssp-runner", "server.mjs"),
+        )
+        server_path = os.path.abspath(server_path)
+        if not os.path.exists(server_path):
+            return None
+
+        try:
+            _BMSSSP_RUNNER = _BmSsspServerRunner(server_path)
+            return _BMSSSP_RUNNER
+        except Exception:
+            _BMSSSP_RUNNER = None
+            return None
+
 
 def _bmsssp_path(G: nx.MultiDiGraph, source_node: int, target_node: int, include_exploration: bool = False) -> Tuple[List[int], List[List[List[float]]]]:
     nodes, idx, edges = _edge_list_from_graph(G)
@@ -421,24 +578,30 @@ def _bmsssp_path(G: nx.MultiDiGraph, source_node: int, target_node: int, include
         "returnPredecessors": True,
     }
 
-    runner = os.environ.get(
-        "BMSSSP_RUNNER",
-        os.path.join(os.path.dirname(__file__), "..", "..", "bmssp-runner", "run.mjs"),
-    )
-    runner = os.path.abspath(runner)
-
     explored_edges: List[List[List[float]]] = []
 
     try:
-        proc = subprocess.run(
-            ["node", runner],
-            input=json.dumps(payload).encode("utf-8"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=20,
-            check=True,
-        )
-        out = json.loads(proc.stdout.decode("utf-8"))
+        out: Dict[str, Any]
+        runner = _get_bmsssp_runner()
+        if runner is not None:
+            out = runner.call(payload, timeout_s=20.0)
+        else:
+            # One-shot fallback (slower): spawn node process per request.
+            one_shot = os.environ.get(
+                "BMSSSP_RUNNER",
+                os.path.join(os.path.dirname(__file__), "..", "..", "bmssp-runner", "run.mjs"),
+            )
+            one_shot = os.path.abspath(one_shot)
+            proc = subprocess.run(
+                ["node", one_shot],
+                input=json.dumps(payload).encode("utf-8"),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=20,
+                check=True,
+            )
+            out = json.loads(proc.stdout.decode("utf-8"))
+
         pred = out.get("predecessors")
         if not isinstance(pred, list):
             raise RuntimeError("runner output missing predecessors")
@@ -456,7 +619,7 @@ def _bmsssp_path(G: nx.MultiDiGraph, source_node: int, target_node: int, include
                         ix, iy = float(G.nodes[n_i]["x"]), float(G.nodes[n_i]["y"])
                         px, py = float(G.nodes[n_p]["x"]), float(G.nodes[n_p]["y"])
                         explored_edges.append([[px, py], [ix, iy]])
-                    except (KeyError, TypeError, IndexError):
+                    except Exception:
                         pass
 
         # Reconstruct path (dst -> src)
@@ -477,9 +640,10 @@ def _bmsssp_path(G: nx.MultiDiGraph, source_node: int, target_node: int, include
         return [nodes[i] for i in path_idx], explored_edges
 
     except Exception:
-        # fallback
+        # Fallback to networkx shortest path.
         path = nx.shortest_path(G, source_node, target_node, weight="length")
         return path, explored_edges
+
 
 
 def _route_polyline_and_edges(G: nx.MultiDiGraph, path_nodes: List[int], scenario_type: str) -> Tuple[List[List[float]], List[Dict[str, Any]]]:
@@ -842,7 +1006,7 @@ async def autocomplete(q: str = Query(..., min_length=3)):
 
 @router.post("/calculate", response_model=RouteResponse)
 async def calculate_route(req: RouteRequest):
-    start_time = time.time()
+    t_total0 = time.time()
 
     try:
         # 1) Graph corridor
@@ -861,6 +1025,15 @@ async def calculate_route(req: RouteRequest):
         # 3) Shortest path (algorithm chosen by frontend)
         chosen_algo = (req.algorithm or AEGIS_ROUTE_ALGO).lower()
         explored_coords = None
+        explored_count: Optional[int] = None
+        network_edges_coords: Optional[List[List[List[float]]]] = None
+
+        # If the frontend is in algo-race mode, send a faint background network so the minimap
+        # reads as 'streets' even before exploration lines accumulate.
+        if req.include_exploration:
+            network_edges_coords = _round_segments(_sample_graph_edge_segments(G, max_n=AEGIS_MAX_NETWORK_SEGS), digits=AEGIS_COORD_ROUND_DIGITS)
+
+        t_algo0 = time.time()
 
         # FAST PATH: use precomputed MSH cache for Dijkstra when destination is MSH
         # and no road closures are active
@@ -898,6 +1071,17 @@ async def calculate_route(req: RouteRequest):
                     path_nodes = nx.shortest_path(G, orig_node, dest_node, weight="length")
                 algo_label = "Dijkstra (networkx) // OSM"
 
+        t_algo1 = time.time()
+
+        # Cap exploration payload size (and keep an accurate count for stats).
+        if explored_coords is not None:
+            explored_count = len(explored_coords)
+            explored_coords = _downsample_segments(explored_coords, AEGIS_MAX_EXPLORATION_SEGS)
+            explored_coords = _round_segments(explored_coords, digits=AEGIS_COORD_ROUND_DIGITS)
+
+        algo_ms = (t_algo1 - t_algo0) * 1000.0
+        total_ms = (time.time() - t_total0) * 1000.0
+
         # 4) Polyline + edge metadata
         route_coords, edges_meta = _route_polyline_and_edges(G, path_nodes, req.scenario_type)
         if not route_coords:
@@ -919,7 +1103,6 @@ async def calculate_route(req: RouteRequest):
         snapped_start = [float(G.nodes[orig_node]["x"]), float(G.nodes[orig_node]["y"])]
         snapped_end = [float(G.nodes[dest_node]["x"]), float(G.nodes[dest_node]["y"])]
 
-        exec_ms = (time.time() - start_time) * 1000.0
 
         # For demo labeling only
         dest_name = "MACKENZIE HEALTH" if "ARREST" in (req.scenario_type or "").upper() else "SCENE RE-ROUTE"
@@ -929,7 +1112,9 @@ async def calculate_route(req: RouteRequest):
         return RouteResponse(
             algorithm=algo_label,
             destination=dest_name,
-            execution_time_ms=round(exec_ms, 2),
+            execution_time_ms=round(algo_ms, 2),
+            algorithm_time_ms=round(algo_ms, 2),
+            total_time_ms=round(total_ms, 2),
             pivots_identified=pivots,
             path_coordinates=route_coords,
             snapped_start=snapped_start,
@@ -941,10 +1126,12 @@ async def calculate_route(req: RouteRequest):
             steps=steps,
             narrative=[
                 "Mission parameters uploaded to Nav-Com.",
-                f"Optimized path found in {round(exec_ms, 2)}ms.",
+                f"Optimized path found in {round(algo_ms, 2)}ms (pathfinding). Total pipeline: {round(total_ms, 2)}ms.",
                 f"Speed profile multiplier: x{mult:.2f} (scenario={req.scenario_type}).",
             ],
             explored_coords=explored_coords,
+            explored_count=explored_count,
+            network_edges_coords=network_edges_coords,
         )
 
     except Exception as e:

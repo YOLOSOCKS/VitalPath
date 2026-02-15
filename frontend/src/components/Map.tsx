@@ -33,13 +33,23 @@ type RouteResponse = {
   snapped_start?: [number, number];
   snapped_end?: [number, number];
   algorithm?: string;
+
+  // Kept for backwards compat: backend now treats this as the *pathfinding* time (not including graph fetch).
   execution_time_ms?: number;
+  // Optional extra timings (if the backend includes them).
+  algorithm_time_ms?: number;
+  total_time_ms?: number;
 
   total_distance_m?: number;
   total_time_s?: number;
   cum_distance_m?: number[];
   cum_time_s?: number[];
   steps?: NavStep[];
+
+  // Optional: exploration + faint network for AlgoRace minimap
+  explored_coords?: [number, number][][];
+  explored_count?: number;
+  network_edges_coords?: [number, number][][];
 };
 
 type AlgoStats = {
@@ -203,6 +213,7 @@ export default function LiveMap({
   // Algorithm Race Mini-Map
   const [algoRaceData, setAlgoRaceData] = useState<AlgoRaceData | null>(null);
   const [showAlgoRace, setShowAlgoRace] = useState(false);
+  const algoRaceReqIdRef = useRef(0);
 
   // Easter Egg Mode
   const [isOsmowsMode, setIsOsmowsMode] = useState(false);
@@ -753,51 +764,113 @@ export default function LiveMap({
   const MARKHAM_STOUFFVILLE_HOSPITAL = { lat: 43.88490014913164, lng: -79.23290206069066 };
 
   const fetchAlgoRace = async (scenario: any) => {
-    try {
-      setShowAlgoRace(true);
-      // Always use the scenario's fixed start so paths are deterministic
-      const start = scenario.start || { lat: 43.85421582751821, lng: -79.311760971958 };
-      const end = MARKHAM_STOUFFVILLE_HOSPITAL;
+    // Guards against stale responses if the user flips scenarios quickly.
+    const reqId = ++algoRaceReqIdRef.current;
 
-      const body = {
-        start,
-        end,
-        scenario_type: scenario.title || 'ROUTINE',
-        include_exploration: true,
-      };
+    // Show the panel immediately (so it *feels* fast) and then stream in results.
+    setShowAlgoRace(true);
+    setAlgoRaceData({
+      dijkstraCoords: [],
+      dijkstraExecMs: 0,
+      dijkstraExplored: [],
+      bmssspCoords: [],
+      bmssspExecMs: 0,
+      bmssspExplored: [],
+      closurePoints: [],
+      networkEdges: [],
+    });
 
-      const [dijkRes, bmssspRes] = await Promise.all([
-        api.post<RouteResponse>('/api/algo/calculate', { ...body, algorithm: 'dijkstra' }),
-        api.post<RouteResponse>('/api/algo/calculate', { ...body, algorithm: 'bmsssp' }),
-      ]);
+    // Always use the scenario's fixed start so paths are deterministic
+    const start = scenario.start || { lat: 43.85421582751821, lng: -79.311760971958 };
+    const end = MARKHAM_STOUFFVILLE_HOSPITAL;
 
-      setAlgoRaceData({
-        dijkstraCoords: dijkRes.data.path_coordinates || [],
-        dijkstraExecMs: Number(dijkRes.data.execution_time_ms ?? 100),
-        dijkstraExplored: (dijkRes.data as any).explored_coords || [],
-        bmssspCoords: bmssspRes.data.path_coordinates || [],
-        bmssspExecMs: Number(bmssspRes.data.execution_time_ms ?? 100),
-        bmssspExplored: (bmssspRes.data as any).explored_coords || [],
-        closurePoints: [],
+    const body = {
+      start,
+      end,
+      scenario_type: scenario.title || 'ROUTINE',
+      include_exploration: true,
+    };
+
+    const dP = api.post<RouteResponse>('/api/algo/calculate', { ...body, algorithm: 'dijkstra' });
+    const bP = api.post<RouteResponse>('/api/algo/calculate', { ...body, algorithm: 'bmsssp' });
+
+    dP
+      .then((dijkRes) => {
+        if (algoRaceReqIdRef.current !== reqId) return;
+        setAlgoRaceData((prev) => ({
+          ...(prev || {
+            dijkstraCoords: [],
+            dijkstraExecMs: 0,
+            dijkstraExplored: [],
+            bmssspCoords: [],
+            bmssspExecMs: 0,
+            bmssspExplored: [],
+            closurePoints: [],
+            networkEdges: [],
+          }),
+          dijkstraCoords: dijkRes.data.path_coordinates || [],
+          dijkstraExecMs: Number(dijkRes.data.execution_time_ms ?? 0),
+          dijkstraExplored: dijkRes.data.explored_coords || [],
+          dijkstraExploredCount: dijkRes.data.explored_count ?? (dijkRes.data.explored_coords?.length || 0),
+          dijkstraTotalDistM: Number(dijkRes.data.total_distance_m ?? 0),
+          dijkstraTotalTimeS: Number(dijkRes.data.total_time_s ?? 0),
+          networkEdges: (prev?.networkEdges && prev.networkEdges.length) ? prev.networkEdges : (dijkRes.data.network_edges_coords || []),
+        }));
+
+        setAlgoStats((prevStats) => ({
+          ...prevStats,
+          dijkstra: {
+            exec_ms: Number(dijkRes.data.execution_time_ms ?? 0),
+            eta_s: Number(dijkRes.data.total_time_s ?? 0),
+            dist_m: Number(dijkRes.data.total_distance_m ?? 0),
+          },
+        }));
+      })
+      .catch((e) => {
+        console.error('AlgoRace dijkstra failed', e);
       });
 
-      // Also populate dev panel stats so they match the mini-map
-      setAlgoStats({
-        dijkstra: {
-          exec_ms: Number(dijkRes.data.execution_time_ms ?? 0),
-          eta_s: Number(dijkRes.data.total_time_s ?? 0),
-          dist_m: Number(dijkRes.data.total_distance_m ?? 0),
-        },
-        bmsssp: {
-          exec_ms: Number(bmssspRes.data.execution_time_ms ?? 0),
-          eta_s: Number(bmssspRes.data.total_time_s ?? 0),
-          dist_m: Number(bmssspRes.data.total_distance_m ?? 0),
-        },
+    bP
+      .then((bmssspRes) => {
+        if (algoRaceReqIdRef.current !== reqId) return;
+        setAlgoRaceData((prev) => ({
+          ...(prev || {
+            dijkstraCoords: [],
+            dijkstraExecMs: 0,
+            dijkstraExplored: [],
+            bmssspCoords: [],
+            bmssspExecMs: 0,
+            bmssspExplored: [],
+            closurePoints: [],
+            networkEdges: [],
+          }),
+          bmssspCoords: bmssspRes.data.path_coordinates || [],
+          bmssspExecMs: Number(bmssspRes.data.execution_time_ms ?? 0),
+          bmssspExplored: bmssspRes.data.explored_coords || [],
+          bmssspExploredCount: bmssspRes.data.explored_count ?? (bmssspRes.data.explored_coords?.length || 0),
+          bmssspTotalDistM: Number(bmssspRes.data.total_distance_m ?? 0),
+          bmssspTotalTimeS: Number(bmssspRes.data.total_time_s ?? 0),
+          networkEdges: (prev?.networkEdges && prev.networkEdges.length) ? prev.networkEdges : (bmssspRes.data.network_edges_coords || []),
+        }));
+
+        setAlgoStats((prevStats) => ({
+          ...prevStats,
+          bmsssp: {
+            exec_ms: Number(bmssspRes.data.execution_time_ms ?? 0),
+            eta_s: Number(bmssspRes.data.total_time_s ?? 0),
+            dist_m: Number(bmssspRes.data.total_distance_m ?? 0),
+          },
+        }));
+      })
+      .catch((e) => {
+        console.error('AlgoRace bmsssp failed', e);
       });
-    } catch (e) {
-      console.error('Algorithm race fetch failed', e);
-      setShowAlgoRace(false);
-    }
+
+    // If BOTH fail, hide the widget (otherwise keep it and show whatever we got).
+    const results = await Promise.allSettled([dP, bP]);
+    if (algoRaceReqIdRef.current !== reqId) return;
+    const anyOk = results.some((r) => r.status === 'fulfilled');
+    if (!anyOk) setShowAlgoRace(false);
   };
 
   // Background reroute: fetch a new route without stopping the animation.
