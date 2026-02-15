@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import axios from 'axios';
 import AlgoRaceMiniMap, { AlgoRaceData } from './AlgoRaceMiniMap';
+import { OSMOWS_LOCATIONS } from '../constants/OsmowsLocations';
 
 type LatLng = { lat: number; lng: number };
 
@@ -32,13 +33,23 @@ type RouteResponse = {
   snapped_start?: [number, number];
   snapped_end?: [number, number];
   algorithm?: string;
+
+  // Kept for backwards compat: backend now treats this as the *pathfinding* time (not including graph fetch).
   execution_time_ms?: number;
+  // Optional extra timings (if the backend includes them).
+  algorithm_time_ms?: number;
+  total_time_ms?: number;
 
   total_distance_m?: number;
   total_time_s?: number;
   cum_distance_m?: number[];
   cum_time_s?: number[];
   steps?: NavStep[];
+
+  // Optional: exploration + faint network for AlgoRace minimap
+  explored_coords?: [number, number][][];
+  explored_count?: number;
+  network_edges_coords?: [number, number][][];
 };
 
 type AlgoStats = {
@@ -170,6 +181,14 @@ export default function LiveMap({
   const ambulanceMarker = useRef<maplibregl.Marker | null>(null);
   const destMarker = useRef<maplibregl.Marker | null>(null);
 
+
+
+  // Osmows markers refs
+  const osmowsMarkersRef = useRef<maplibregl.Marker[]>([]);
+
+  // Osmows tracking
+  const visitedOsmows = useRef<Set<number>>(new Set());
+
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([]);
   const [currentPos, setCurrentPos] = useState<[number, number] | null>(null);
 
@@ -194,6 +213,10 @@ export default function LiveMap({
   // Algorithm Race Mini-Map
   const [algoRaceData, setAlgoRaceData] = useState<AlgoRaceData | null>(null);
   const [showAlgoRace, setShowAlgoRace] = useState(false);
+  const algoRaceReqIdRef = useRef(0);
+
+  // Easter Egg Mode
+  const [isOsmowsMode, setIsOsmowsMode] = useState(false);
 
   // Dynamic Roadblock Injection
   const [activeRoadblocks, setActiveRoadblocks] = useState<[number, number][]>([]);
@@ -269,6 +292,26 @@ export default function LiveMap({
   useEffect(() => {
     activeWaypointIdxRef.current = activeWaypointIdx;
   }, [activeWaypointIdx]);
+
+  // Toggle Osmows visibility based on mode
+  useEffect(() => {
+    if (!map.current) return;
+
+    // Clear existing DOM markers
+    osmowsMarkersRef.current.forEach(m => m.remove());
+    osmowsMarkersRef.current = [];
+
+    if (isOsmowsMode) {
+      OSMOWS_LOCATIONS.forEach((loc) => {
+        // Use standard marker with red color - most reliable
+        const marker = new maplibregl.Marker({ color: '#ef4444' })
+          .setLngLat([loc.lng, loc.lat])
+          .addTo(map.current!);
+
+        osmowsMarkersRef.current.push(marker);
+      });
+    }
+  }, [isOsmowsMode]);
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
@@ -361,6 +404,10 @@ export default function LiveMap({
         },
       });
 
+      // Osmows markers - REMOVED LAYER APPROACH, USING DOM MARKERS NOW
+      // Logic handled in isOsmowsMode useEffect
+
+
       // Don't auto-route on load — wait for user to search a destination
 
       // Defer 3D buildings so they don't block the initial animation
@@ -408,6 +455,9 @@ export default function LiveMap({
     roadblockStopIdx.current = null;
     pendingRerouteRef.current = null;
     if (rerouteIntervalRef.current) { clearInterval(rerouteIntervalRef.current); rerouteIntervalRef.current = null; }
+
+    // Reset visited Osmows on new scenario
+    visitedOsmows.current.clear();
 
     // Prevent full reset if this is just a status update (e.g. patient pickup)
     if (activeScenario?.title === prevScenarioTitleRef.current && activeScenario?.patientOnBoard !== prevPatientStatusRef.current) {
@@ -714,51 +764,113 @@ export default function LiveMap({
   const MARKHAM_STOUFFVILLE_HOSPITAL = { lat: 43.88490014913164, lng: -79.23290206069066 };
 
   const fetchAlgoRace = async (scenario: any) => {
-    try {
-      setShowAlgoRace(true);
-      // Always use the scenario's fixed start so paths are deterministic
-      const start = scenario.start || { lat: 43.85421582751821, lng: -79.311760971958 };
-      const end = MARKHAM_STOUFFVILLE_HOSPITAL;
+    // Guards against stale responses if the user flips scenarios quickly.
+    const reqId = ++algoRaceReqIdRef.current;
 
-      const body = {
-        start,
-        end,
-        scenario_type: scenario.title || 'ROUTINE',
-        include_exploration: true,
-      };
+    // Show the panel immediately (so it *feels* fast) and then stream in results.
+    setShowAlgoRace(true);
+    setAlgoRaceData({
+      dijkstraCoords: [],
+      dijkstraExecMs: 0,
+      dijkstraExplored: [],
+      bmssspCoords: [],
+      bmssspExecMs: 0,
+      bmssspExplored: [],
+      closurePoints: [],
+      networkEdges: [],
+    });
 
-      const [dijkRes, bmssspRes] = await Promise.all([
-        api.post<RouteResponse>('/api/algo/calculate', { ...body, algorithm: 'dijkstra' }),
-        api.post<RouteResponse>('/api/algo/calculate', { ...body, algorithm: 'bmsssp' }),
-      ]);
+    // Always use the scenario's fixed start so paths are deterministic
+    const start = scenario.start || { lat: 43.85421582751821, lng: -79.311760971958 };
+    const end = MARKHAM_STOUFFVILLE_HOSPITAL;
 
-      setAlgoRaceData({
-        dijkstraCoords: dijkRes.data.path_coordinates || [],
-        dijkstraExecMs: Number(dijkRes.data.execution_time_ms ?? 100),
-        dijkstraExplored: (dijkRes.data as any).explored_coords || [],
-        bmssspCoords: bmssspRes.data.path_coordinates || [],
-        bmssspExecMs: Number(bmssspRes.data.execution_time_ms ?? 100),
-        bmssspExplored: (bmssspRes.data as any).explored_coords || [],
-        closurePoints: [],
+    const body = {
+      start,
+      end,
+      scenario_type: scenario.title || 'ROUTINE',
+      include_exploration: true,
+    };
+
+    const dP = api.post<RouteResponse>('/api/algo/calculate', { ...body, algorithm: 'dijkstra' });
+    const bP = api.post<RouteResponse>('/api/algo/calculate', { ...body, algorithm: 'bmsssp' });
+
+    dP
+      .then((dijkRes) => {
+        if (algoRaceReqIdRef.current !== reqId) return;
+        setAlgoRaceData((prev) => ({
+          ...(prev || {
+            dijkstraCoords: [],
+            dijkstraExecMs: 0,
+            dijkstraExplored: [],
+            bmssspCoords: [],
+            bmssspExecMs: 0,
+            bmssspExplored: [],
+            closurePoints: [],
+            networkEdges: [],
+          }),
+          dijkstraCoords: dijkRes.data.path_coordinates || [],
+          dijkstraExecMs: Number(dijkRes.data.execution_time_ms ?? 0),
+          dijkstraExplored: dijkRes.data.explored_coords || [],
+          dijkstraExploredCount: dijkRes.data.explored_count ?? (dijkRes.data.explored_coords?.length || 0),
+          dijkstraTotalDistM: Number(dijkRes.data.total_distance_m ?? 0),
+          dijkstraTotalTimeS: Number(dijkRes.data.total_time_s ?? 0),
+          networkEdges: (prev?.networkEdges && prev.networkEdges.length) ? prev.networkEdges : (dijkRes.data.network_edges_coords || []),
+        }));
+
+        setAlgoStats((prevStats) => ({
+          ...prevStats,
+          dijkstra: {
+            exec_ms: Number(dijkRes.data.execution_time_ms ?? 0),
+            eta_s: Number(dijkRes.data.total_time_s ?? 0),
+            dist_m: Number(dijkRes.data.total_distance_m ?? 0),
+          },
+        }));
+      })
+      .catch((e) => {
+        console.error('AlgoRace dijkstra failed', e);
       });
 
-      // Also populate dev panel stats so they match the mini-map
-      setAlgoStats({
-        dijkstra: {
-          exec_ms: Number(dijkRes.data.execution_time_ms ?? 0),
-          eta_s: Number(dijkRes.data.total_time_s ?? 0),
-          dist_m: Number(dijkRes.data.total_distance_m ?? 0),
-        },
-        bmsssp: {
-          exec_ms: Number(bmssspRes.data.execution_time_ms ?? 0),
-          eta_s: Number(bmssspRes.data.total_time_s ?? 0),
-          dist_m: Number(bmssspRes.data.total_distance_m ?? 0),
-        },
+    bP
+      .then((bmssspRes) => {
+        if (algoRaceReqIdRef.current !== reqId) return;
+        setAlgoRaceData((prev) => ({
+          ...(prev || {
+            dijkstraCoords: [],
+            dijkstraExecMs: 0,
+            dijkstraExplored: [],
+            bmssspCoords: [],
+            bmssspExecMs: 0,
+            bmssspExplored: [],
+            closurePoints: [],
+            networkEdges: [],
+          }),
+          bmssspCoords: bmssspRes.data.path_coordinates || [],
+          bmssspExecMs: Number(bmssspRes.data.execution_time_ms ?? 0),
+          bmssspExplored: bmssspRes.data.explored_coords || [],
+          bmssspExploredCount: bmssspRes.data.explored_count ?? (bmssspRes.data.explored_coords?.length || 0),
+          bmssspTotalDistM: Number(bmssspRes.data.total_distance_m ?? 0),
+          bmssspTotalTimeS: Number(bmssspRes.data.total_time_s ?? 0),
+          networkEdges: (prev?.networkEdges && prev.networkEdges.length) ? prev.networkEdges : (bmssspRes.data.network_edges_coords || []),
+        }));
+
+        setAlgoStats((prevStats) => ({
+          ...prevStats,
+          bmsssp: {
+            exec_ms: Number(bmssspRes.data.execution_time_ms ?? 0),
+            eta_s: Number(bmssspRes.data.total_time_s ?? 0),
+            dist_m: Number(bmssspRes.data.total_distance_m ?? 0),
+          },
+        }));
+      })
+      .catch((e) => {
+        console.error('AlgoRace bmsssp failed', e);
       });
-    } catch (e) {
-      console.error('Algorithm race fetch failed', e);
-      setShowAlgoRace(false);
-    }
+
+    // If BOTH fail, hide the widget (otherwise keep it and show whatever we got).
+    const results = await Promise.allSettled([dP, bP]);
+    if (algoRaceReqIdRef.current !== reqId) return;
+    const anyOk = results.some((r) => r.status === 'fulfilled');
+    if (!anyOk) setShowAlgoRace(false);
   };
 
   // Background reroute: fetch a new route without stopping the animation.
@@ -1454,7 +1566,69 @@ export default function LiveMap({
         >
           {showEtaPanel ? '✕ DEV' : '⚙ DEV'}
         </button>
+
+        {/* EASTER EGG TRIGGER */}
+        {showEtaPanel && (
+          <button
+            onClick={() => {
+              setIsOsmowsMode(true);
+              // Zoom out to show York Region
+              map.current?.flyTo({
+                center: [-79.3117, 43.8542], // York U center approx
+                zoom: 11,
+                pitch: 0,
+                bearing: 0,
+                essential: true
+              });
+            }}
+            className="px-3 py-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-400 text-xs font-mono font-bold hover:bg-orange-500/30 transition-all"
+            title="Deploy Tactical Nutrition"
+          >
+            🌯
+          </button>
+        )}
       </div>
+
+      {/* EASTER EGG OVERLAY */}
+      {isOsmowsMode && (
+        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-start pointer-events-none pt-12">
+          {/* Dark vignette to focus on map - removing this to not obscure map */}
+          {/* <div className="absolute inset-0 bg-black/40 pointer-events-auto" /> */}
+
+          <div className="relative z-10 p-6 flex flex-col items-center gap-3 text-center bg-black/90 backdrop-blur-md rounded-2xl border border-orange-500/30 shadow-[0_0_50px_rgba(249,115,22,0.3)] max-w-sm pointer-events-auto">
+
+            {/* Close X Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsOsmowsMode(false);
+                if (ambulanceMarker.current) {
+                  const pos = ambulanceMarker.current.getLngLat();
+                  map.current?.flyTo({
+                    center: pos,
+                    zoom: 16,
+                    pitch: 70,
+                    bearing: smoothBearingRef.current || 0,
+                    essential: true
+                  });
+                }
+              }}
+              className="absolute top-2 right-2 p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all cursor-pointer z-50"
+            >
+              ✕
+            </button>
+
+            <h2 className="text-xl font-black text-orange-500 tracking-tighter uppercase drop-shadow-[0_0_15px_rgba(249,115,22,0.8)] leading-none text-center">
+              NUTRITIONAL<br />DEFICIT DETECTED
+            </h2>
+
+            <p className="text-gray-300 font-mono text-xs leading-relaxed">
+              CRITICAL: <span className="text-orange-400 font-bold">OSMOW'S</span> LEVEL CRITICALLY LOW. <br />
+              PLEASE REFUEL AT THE NEAREST LOCATION ASAP.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Algorithm Race Mini-Map (bottom-right) */}
       <AlgoRaceMiniMap data={algoRaceData} visible={showAlgoRace} />
