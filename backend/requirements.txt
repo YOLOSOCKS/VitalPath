@@ -63,3 +63,4 @@ osmnx
 scikit-learn
 google-genai
 geopy
+matplotlib
