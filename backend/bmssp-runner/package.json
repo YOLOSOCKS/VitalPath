@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "bm-sssp": "github:Braeniac/bm-sssp"
+    "bm-sssp": "1.0.0"
   }
 }
