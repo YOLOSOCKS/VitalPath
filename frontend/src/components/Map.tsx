@@ -28,15 +28,16 @@ type NavStep = {
   maneuver: string;
 };
 
+// Mirrors backend app/algorithm/router.py RouteResponse
+type PivotNode = { id: string; lat: number; lng: number; type: string };
 type RouteResponse = {
   path_coordinates: [number, number][]; // [lng, lat]
   snapped_start?: [number, number];
   snapped_end?: [number, number];
   algorithm?: string;
+  destination?: string;
 
-  // Kept for backwards compat: backend now treats this as the *pathfinding* time (not including graph fetch).
   execution_time_ms?: number;
-  // Optional extra timings (if the backend includes them).
   algorithm_time_ms?: number;
   total_time_ms?: number;
 
@@ -45,8 +46,9 @@ type RouteResponse = {
   cum_distance_m?: number[];
   cum_time_s?: number[];
   steps?: NavStep[];
+  pivots_identified?: PivotNode[];
+  narrative?: string[];
 
-  // Optional: exploration + faint network for AlgoRace minimap
   explored_coords?: [number, number][][];
   explored_count?: number;
   network_edges_coords?: [number, number][][];

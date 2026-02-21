@@ -1,15 +1,23 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.algorithm import router as algo_router
-from app.services.gemini import get_ai_response, ChatRequest
+from app.vitalpath import router as vitalpath_router
+from app.services.gemini import (
+    get_ai_response,
+    get_cargo_integrity_response,
+    get_risk_evaluate_response,
+    ChatRequest,
+    CargoIntegrityRequest,
+    RiskEvaluateRequest,
+)
 from fastapi.responses import Response
 from app.services.voice import generate_voice_stream
 
 
 app = FastAPI(
-    title="VitalPath AI API", 
-    description="Backend for VitalPath AI - Powered by Duan-Mao Algo & Gemini",
-    version="0.1.0"
+    title="VitalPath AI API",
+    description="Backend for VitalPath AI - Organ & critical medical transport. Routing, telemetry, AI cargo integrity, risk, mission logging, alerts.",
+    version="0.2.0",
 )
 
 # CORS: allow common dev server ports (Vite + legacy)
@@ -32,8 +40,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Connect the Duan-Mao Router
+# Algorithm (routing) and VitalPath (telemetry, risk, mission, alerts)
 app.include_router(algo_router.router, prefix="/api/algo", tags=["algorithm"])
+app.include_router(vitalpath_router.router, prefix="/api/vitalpath", tags=["vitalpath"])
 
 @app.get("/")
 def read_root():
@@ -49,3 +58,14 @@ async def speak_ai_response(req: ChatRequest):
     if audio_content:
         return Response(content=audio_content, media_type="audio/mpeg")
     return {"error": "Voice generation failed"}
+
+
+# VitalPath AI: cargo integrity and risk evaluation
+@app.post("/api/ai/cargo-integrity")
+async def cargo_integrity_endpoint(req: CargoIntegrityRequest):
+    return await get_cargo_integrity_response(req)
+
+
+@app.post("/api/ai/risk-evaluate")
+async def risk_evaluate_endpoint(req: RiskEvaluateRequest):
+    return await get_risk_evaluate_response(req)

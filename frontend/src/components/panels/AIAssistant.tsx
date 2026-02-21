@@ -1,10 +1,21 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import axios from 'axios';
 
+// Shared API base (aligns with Map and backend); use VITE_API_BASE when hitting backend directly
+const api = axios.create({
+  baseURL: (import.meta as any).env?.VITE_API_BASE || '',
+});
+
 interface Message {
   role: 'user' | 'ai';
   text: string;
   timestamp: string;
+}
+
+// Matches backend ChatRequest: { message: string; context?: string }
+interface ChatRequest {
+  message: string;
+  context?: string;
 }
 
 // 1. Wrap in forwardRef to allow App.tsx to 'hold' this component
@@ -65,8 +76,8 @@ const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
         URL.revokeObjectURL(audioRef.current.src);
       }
 
-      const res = await axios.post('/api/ai/speak', 
-        { message: text }, 
+      const res = await api.post('/api/ai/speak',
+        { message: text, context: 'general' } as ChatRequest,
         { responseType: 'blob' }
       );
       
@@ -92,7 +103,10 @@ const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
     setIsLoading(true);
 
     try {
-      const res = await axios.post('/api/ai/chat', { message: userMsg.text });
+      const res = await api.post<{ response: string }>('/api/ai/chat', {
+        message: userMsg.text,
+        context: 'general',
+      } as ChatRequest);
       const aiText = res.data.response;
 
       const aiMsg: Message = {
