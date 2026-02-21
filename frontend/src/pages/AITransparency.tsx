@@ -3,8 +3,8 @@ import ConfidenceBadge from '../components/ConfidenceBadge';
 
 export default function AITransparency() {
   useEffect(() => {
-    document.title = 'AI Transparency | VitalPath AI';
-    return () => { document.title = 'VitalPath AI | Mission Control'; };
+    document.title = 'AI Transparency | VitalPath';
+    return () => { document.title = 'VitalPath | Cargo Monitor'; };
   }, []);
 
   return (
@@ -24,13 +24,12 @@ export default function AITransparency() {
             What VitalPath AI Does
           </h2>
           <p className="text-gray-300 text-sm leading-relaxed mb-3">
-            VitalPath AI analyzes dispatch data, vitals, and routing context to provide advisory guidance for EMS operations. 
-            The system processes incoming information and suggests concise, EMS-style bullet points to support decision-making 
-            under pressure.
+            VitalPath AI monitors life-critical cargo—organs, blood products, and vaccines—using sensor data (temperature, shock, lid seal, battery) and routing context. 
+            It flags risks and suggests next steps to keep shipments within cold-chain and handling specs.
           </p>
           <p className="text-amber-200/90 text-sm leading-relaxed">
-            <strong>Important:</strong> All outputs are advisory only. They are not medical diagnoses, legal advice, or 
-            clinical decisions. Always rely on your professional judgment and official protocols.
+            <strong>Important:</strong> All outputs are advisory only. They are not a substitute for transport protocols or receiving-facility decisions. 
+            Always follow official procedures and professional judgment.
           </p>
         </section>
 

@@ -22,7 +22,7 @@ interface ChatRequest {
 const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'ai', text: 'VitalPath AI SYSTEM ONLINE. READY FOR TRIAGE SUPPORT.', timestamp: 'NOW' }
+    { role: 'ai', text: 'VitalPath AI online. Monitoring temperature, shock, seal & battery. Ask about cargo viability or what to do next.', timestamp: 'NOW' }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
@@ -137,7 +137,7 @@ const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
       <div className="p-3 border-b border-white/10 bg-white/5 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase">
-            VitalPath AI // TRIAGE
+            CARGO GUARDIAN
           </h2>
           <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-yellow-400 animate-ping' : 'bg-green-500'}`} />
         </div>
@@ -167,7 +167,7 @@ const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
             <span className="text-[9px] text-gray-600 mt-1">{m.timestamp}</span>
           </div>
         ))}
-        {isLoading && <div className="text-cyan-400 animate-pulse font-mono text-[10px] uppercase">Analyzing medical parameters...</div>}
+        {isLoading && <div className="text-cyan-400 animate-pulse font-mono text-[10px] uppercase">Analyzing cargo status...</div>}
       </div>
 
       <div className="p-2 border-t border-white/10 bg-black/50 flex gap-2">
@@ -176,7 +176,7 @@ const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-          placeholder="ENTER PROTOCOL QUERY..."
+          placeholder="Ask about cargo, route, or next steps..."
           className="flex-1 bg-transparent border-none outline-none text-cyan-400 font-mono text-xs placeholder-gray-700"
           disabled={isLoading}
         />

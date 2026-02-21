@@ -137,33 +137,42 @@ function computeNavLive(meta: {
 
 // Default center: Washington DC (DMV area)
 const DEFAULT_CENTER = { lat: 38.9072, lng: -77.0369 };
-// DMV area hospitals and landmarks
+// Transplant centers, blood banks, distribution
 const HOWARD_UNIV_HOSPITAL = { lat: 38.9185, lng: -77.0195 };
 const GEORGETOWN_UNIV_HOSPITAL = { lat: 38.9114, lng: -77.0726 };
 const UNION_MARKET = { lat: 38.9086, lng: -76.9873 };
 
 const SCENARIOS: Record<string, any> = {
-  CARDIAC_ARREST: {
-    title: 'CARDIAC ARREST // UNIT 992',
+  ORGAN_TRANSPORT: {
+    title: 'ORGAN TRANSPORT // COLD-CHAIN ACTIVE',
     isRedAlert: true,
     start: DEFAULT_CENTER,
     end: HOWARD_UNIV_HOSPITAL,
-    destName: 'Howard University Hospital',
-    aiPrompt: 'URGENT: 65yo Male, Cardiac Arrest. Patient on board. Route continuously monitored. Vitals critical.',
-    vitals: { hr: 0, bp: '0/0', o2: 45 },
+    destName: 'Howard University Hospital — Transplant Center',
+    aiPrompt: 'Life-critical organ shipment en route. Cold-chain 2–8°C monitored. Lid sealed, battery nominal. Recommend continuous monitoring; ETA within safe window.',
+    cargoTelemetry: { temperature_c: 4.2, shock_g: 0.1, lid_closed: true, battery_percent: 92, elapsed_time_s: 0 },
     patientOnBoard: true,
   },
-  MVA_TRAUMA: {
-    title: 'MVA TRAUMA // UNION MARKET',
-    isRedAlert: true,
+  BLOOD_RUN: {
+    title: 'BLOOD PRODUCTS // ROUTINE',
+    isRedAlert: false,
     start: DEFAULT_CENTER,
-    // Intermediate stop at Union Market for pickup
     waypoints: [UNION_MARKET],
     end: GEORGETOWN_UNIV_HOSPITAL,
-    destName: 'Union Market -> Georgetown University Hospital',
-    aiPrompt: 'CRITICAL: MVA at Union Market. Proceed to scene, stabilize, and transport to Georgetown University Hospital. Vitals pending patient contact.',
-    vitals: { hr: 135, bp: { sys: 90, dia: 60 }, spO2: 94 },
-    patientOnBoard: false, // Starts false, becomes true after pickup
+    destName: 'Union Market Distribution → Georgetown University Hospital',
+    aiPrompt: 'Blood products transport. Temperature and seal within spec. No shock events. Proceed to destination; verify handoff protocol on arrival.',
+    cargoTelemetry: { temperature_c: 3.8, shock_g: 0.3, lid_closed: true, battery_percent: 88, elapsed_time_s: 0 },
+    patientOnBoard: false,
+  },
+  CARGO_ALERT: {
+    title: 'CARGO ALERT // SEAL / TEMP RISK',
+    isRedAlert: true,
+    start: DEFAULT_CENTER,
+    end: HOWARD_UNIV_HOSPITAL,
+    destName: 'Howard University Hospital — Emergency Handoff',
+    aiPrompt: 'CRITICAL: Container seal compromised or temperature drift detected. Assess viability; consider backup transport or expedited handoff. Do not open lid until receiving facility ready.',
+    cargoTelemetry: { temperature_c: 7.1, shock_g: 1.2, lid_closed: false, battery_percent: 45, elapsed_time_s: 0 },
+    patientOnBoard: true,
   },
 };
 
@@ -1220,9 +1229,9 @@ export default function LiveMap({
         if (sc && sc.waypoints && currentIdx >= 0) {
           // Arrived at a waypoint. Wait 5s then go to next.
           setTimeout(() => {
-            // If this is MVA Trauma and we just finished the first leg (pickup at Markville), 
-            // update the scenario state to 'patientOnBoard' BEFORE routing to hospital.
-            if (sc.title && sc.title.includes('MVA') && currentIdx === 0 && onScenarioInject) {
+// If this is multi-leg (e.g. Blood Run pickup) and we just finished the first leg,
+            // update the scenario state to 'patientOnBoard' (cargo onboard) BEFORE routing to destination.
+            if (sc.title && sc.title.includes('BLOOD') && currentIdx === 0 && onScenarioInject) {
               onScenarioInject({ ...sc, patientOnBoard: true });
             }
 
@@ -1381,7 +1390,7 @@ export default function LiveMap({
             </span>
           </div>
           <div className="text-[9px] text-gray-500 font-mono">
-            UNIT 992 // {currentPos ? `${currentPos[0].toFixed(5)}, ${currentPos[1].toFixed(5)}` : '--, --'}
+            SHIPMENT // {currentPos ? `${currentPos[0].toFixed(5)}, ${currentPos[1].toFixed(5)}` : '--, --'}
           </div>
           {routeRef.current?.totalDist != null && routeRef.current?.totalTime != null && (
             <div className="text-[9px] text-gray-500 font-mono">

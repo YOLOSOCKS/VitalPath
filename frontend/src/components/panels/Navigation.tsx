@@ -45,7 +45,7 @@ export default function Navigation({
   return (
     <div className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4 flex flex-col justify-between ${className}`}>
       <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase border-b border-white/5 pb-1">
-        NAV-COM // MISSION_STATE
+        NAV // ROUTE TO DESTINATION
       </h2>
 
       <div className="flex flex-col items-center justify-center my-2">
