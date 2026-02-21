@@ -24,9 +24,9 @@ ox.settings.log_console = False
 
 AEGIS_ROUTE_ALGO = os.environ.get("AEGIS_ROUTE_ALGO", "dijkstra").lower()
 
-# Markham Stouffville Hospital — fixed destination for cardiac arrest scenarios
-MSH_LAT = 43.8335
-MSH_LNG = -79.2630
+# Howard University Hospital — fixed destination for cardiac arrest scenarios (DMV)
+MSH_LAT = 38.9185
+MSH_LNG = -77.0195
 _MSH_MATCH_THRESHOLD_DEG = 0.002  # ~200 m tolerance for coordinate matching
 
 # Payload / visualization caps (keeps AlgoRace responsive)
@@ -855,8 +855,13 @@ _NOMINATIM_HEADERS = {"User-Agent": "aegis-paradash/1.0"}
 _NOMINATIM_MIN_INTERVAL = 1.1  # seconds between calls
 _nominatim_last_call: float = 0.0
 
-# York Region bounding box  (west, south, east, north)
-_YORK_REGION_VIEWBOX = "-79.65,43.75,-79.15,44.15"
+# DMV area bounding box (Washington DC, Northern Virginia, Maryland suburbs)
+# Format: west, south, east, north (Nominatim viewbox)
+DMV_MIN_LAT = 38.5
+DMV_MAX_LAT = 39.2
+DMV_MIN_LON = -77.6
+DMV_MAX_LON = -76.7
+_DMV_VIEWBOX = "-77.6,38.5,-76.7,39.2"
 
 # Caches
 _geocode_cache: Dict[str, Tuple[float, float]] = {}
@@ -892,16 +897,27 @@ async def geocode(q: str = Query(..., min_length=3)):
             resp = await client.get(
                 _NOMINATIM_URL,
                 headers=_NOMINATIM_HEADERS,
-                params={"q": q, "format": "json", "limit": 1},
+                params={
+                    "q": q,
+                    "format": "json",
+                    "limit": 1,
+                    "countrycodes": "us",
+                    "viewbox": _DMV_VIEWBOX,
+                    "bounded": 0,
+                },
             )
             _nominatim_last_call = time.monotonic()
             resp.raise_for_status()
             data = resp.json()
 
         if not data:
-            raise HTTPException(status_code=400, detail=f"No results for '{q}'")
+            raise HTTPException(status_code=400, detail="No addresses found in the DMV area. Try a more specific query.")
 
         lat, lng = float(data[0]["lat"]), float(data[0]["lon"])
+
+        # Validate result is within DMV bounds
+        if not (DMV_MIN_LAT <= lat <= DMV_MAX_LAT and DMV_MIN_LON <= lng <= DMV_MAX_LON):
+            raise HTTPException(status_code=400, detail="No addresses found in the DMV area. Try a more specific query.")
 
         # Cache (bounded)
         if len(_geocode_cache) > 200:
@@ -919,7 +935,7 @@ async def geocode(q: str = Query(..., min_length=3)):
 
 @router.get("/autocomplete", response_model=AutocompleteResponse)
 async def autocomplete(q: str = Query(..., min_length=3)):
-    """Return up to 5 address suggestions within York Region via Nominatim."""
+    """Return up to 5 address suggestions within the DMV area via Nominatim."""
     global _nominatim_last_call
     import httpx
 
@@ -941,7 +957,8 @@ async def autocomplete(q: str = Query(..., min_length=3)):
                     "format": "json",
                     "limit": 10,
                     "addressdetails": 1,
-                    "viewbox": _YORK_REGION_VIEWBOX,
+                    "countrycodes": "us",
+                    "viewbox": _DMV_VIEWBOX,
                     "bounded": 1,
                 },
             )
@@ -953,12 +970,15 @@ async def autocomplete(q: str = Query(..., min_length=3)):
             _nominatim_cache[cache_key] = []
             return AutocompleteResponse(results=[])
 
-        # Post-filter: only keep results actually in York Region
-        york_results = [
-            r for r in data
-            if r.get("address", {}).get("county", "").lower() == "york region"
-               or r.get("address", {}).get("state_district", "").lower() == "york region"
-        ]
+        # Post-filter: only keep results within DMV bounds
+        def _in_dmv(r: dict) -> bool:
+            try:
+                lat, lng = float(r["lat"]), float(r["lon"])
+                return DMV_MIN_LAT <= lat <= DMV_MAX_LAT and DMV_MIN_LON <= lng <= DMV_MAX_LON
+            except (ValueError, KeyError):
+                return False
+
+        dmv_results = [r for r in data if _in_dmv(r)]
 
         # Rank results: prioritize actual addresses over named places
         query_lower = q.strip().lower()
@@ -979,7 +999,7 @@ async def autocomplete(q: str = Query(..., min_length=3)):
                     score -= 20
             return score
 
-        york_results.sort(key=_rank)
+        dmv_results.sort(key=_rank)
 
         out = [
             AutocompleteResult(
@@ -987,7 +1007,7 @@ async def autocomplete(q: str = Query(..., min_length=3)):
                 lng=float(r["lon"]),
                 display_name=r.get("display_name", ""),
             )
-            for r in york_results[:5]
+            for r in dmv_results[:5]
         ]
 
         # Cache (bounded)

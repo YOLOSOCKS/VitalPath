@@ -1,8 +1,9 @@
+// Tactical Nutrition easter egg locations (DMV area)
 export const OSMOWS_LOCATIONS = [
-    { lat: 43.9033345, lng: -79.2673643, name: "Osmow's" },
-    { lat: 43.8669516, lng: -79.2837969, name: "Osmow's" },
-    { lat: 43.8525769, lng: -79.3591312, name: "Osmow's" },
-    { lat: 43.8771507, lng: -79.4139862, name: "Osmow's" },
-    { lat: 43.8434777, lng: -79.4081237, name: "Osmow's" },
-    { lat: 43.9670888, lng: -79.2643871, name: "Osmow's" },
+    { lat: 38.9086, lng: -76.9873, name: "Tactical Nutrition" },  // Union Market
+    { lat: 38.9155, lng: -77.0318, name: "Tactical Nutrition" },  // U Street
+    { lat: 38.8967, lng: -77.0361, name: "Tactical Nutrition" },  // Federal Triangle
+    { lat: 38.8816, lng: -77.0722, name: "Tactical Nutrition" },  // Georgetown
+    { lat: 38.9025, lng: -76.9945, name: "Tactical Nutrition" },  // NoMa
+    { lat: 38.9474, lng: -77.0626, name: "Tactical Nutrition" },  // Bethesda
 ];

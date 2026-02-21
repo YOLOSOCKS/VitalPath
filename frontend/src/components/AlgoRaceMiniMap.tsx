@@ -150,7 +150,7 @@ export default function AlgoRaceMiniMap({
       container: containerRef.current,
       // Slightly more detailed basemap than the old "nolabels" one.
       style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-      center: [-79.29, 43.87],
+      center: [-77.0369, 38.9072], // DMV area (DC center)
       zoom: 12,
       interactive: false,
       attributionControl: false,

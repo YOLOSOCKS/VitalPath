@@ -5,7 +5,7 @@ export const SCENARIOS = {
     vitals: { hr: 0, bp: { sys: 0, dia: 0 }, spO2: 70 },
     dispatch: "Cardiac arrest, CPR in progress. Priority transport.",
     aiPrompt: "Confirmed Cardiac Arrest. Recommend immediate LUCAS deployment and ACLS protocol.",
-    location: { lat: 43.854, lng: -79.312 } // York University Markham
+    location: { lat: 38.9072, lng: -77.0369 } // DC center (DMV area)
   },
   TRAUMA_MVA: {
     title: "CODE 3 // MAJOR TRAUMA",
@@ -13,6 +13,6 @@ export const SCENARIOS = {
     vitals: { hr: 135, bp: { sys: 85, dia: 50 }, spO2: 88 },
     dispatch: "UNIT 992: MVA AT MAJOR MAC/404. MULTIPLE VICTIMS. HEMORRHAGIC SHOCK.",
     aiPrompt: "Blunt force trauma detected. Initiate rapid fluid bolus and request level 1 trauma center bypass.",
-    location: { lat: 43.85, lng: -79.33 }
+    location: { lat: 38.8977, lng: -77.0065 } // Union Station area (DMV)
   }
 };

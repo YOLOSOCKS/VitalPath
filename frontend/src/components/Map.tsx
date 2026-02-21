@@ -133,33 +133,33 @@ function computeNavLive(meta: {
   };
 }
 
-// York University — Markham campus (1 University Blvd)
-const YORK_U = { lat: 43.85421582751821, lng: -79.311760971958 };
-// Markham Stouffville Hospital
-const MARKHAM_STOUFFVILLE = { lat: 43.88490014913164, lng: -79.23290206069066 }; // Precise MSH
-const MARKVILLE_MALL = { lat: 43.868, lng: -79.289 };
-const CINEPLEX_VIP = { lat: 43.856, lng: -79.336 }; // Approx Cineplex VIP Markham
+// Default center: Washington DC (DMV area)
+const DEFAULT_CENTER = { lat: 38.9072, lng: -77.0369 };
+// DMV area hospitals and landmarks
+const HOWARD_UNIV_HOSPITAL = { lat: 38.9185, lng: -77.0195 };
+const GEORGETOWN_UNIV_HOSPITAL = { lat: 38.9114, lng: -77.0726 };
+const UNION_MARKET = { lat: 38.9086, lng: -76.9873 };
 
 const SCENARIOS: Record<string, any> = {
   CARDIAC_ARREST: {
     title: 'CARDIAC ARREST // UNIT 992',
     isRedAlert: true,
-    start: YORK_U,
-    end: MARKHAM_STOUFFVILLE,
-    destName: 'Markham Stouffville Hospital',
+    start: DEFAULT_CENTER,
+    end: HOWARD_UNIV_HOSPITAL,
+    destName: 'Howard University Hospital',
     aiPrompt: 'URGENT: 65yo Male, Cardiac Arrest. Patient on board. Route continuously monitored. Vitals critical.',
     vitals: { hr: 0, bp: '0/0', o2: 45 },
     patientOnBoard: true,
   },
   MVA_TRAUMA: {
-    title: 'MVA TRAUMA // MARKVILLE',
+    title: 'MVA TRAUMA // UNION MARKET',
     isRedAlert: true,
-    start: YORK_U,
-    // Intermediate stop at Markville Mall for pickup
-    waypoints: [MARKVILLE_MALL],
-    end: MARKHAM_STOUFFVILLE,
-    destName: 'Markville Mall -> Markham Stouffville',
-    aiPrompt: 'CRITICAL: MVA at Markville Mall. Proceed to scene, stabilize, and transport to Markham Stouffville. Vitals pending patient contact.',
+    start: DEFAULT_CENTER,
+    // Intermediate stop at Union Market for pickup
+    waypoints: [UNION_MARKET],
+    end: GEORGETOWN_UNIV_HOSPITAL,
+    destName: 'Union Market -> Georgetown University Hospital',
+    aiPrompt: 'CRITICAL: MVA at Union Market. Proceed to scene, stabilize, and transport to Georgetown University Hospital. Vitals pending patient contact.',
     vitals: { hr: 135, bp: { sys: 90, dia: 60 }, spO2: 94 },
     patientOnBoard: false, // Starts false, becomes true after pickup
   },
@@ -319,7 +319,7 @@ export default function LiveMap({
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-      center: [YORK_U.lng, YORK_U.lat],
+      center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
       zoom: 16,
       pitch: 70,
     });
@@ -357,7 +357,7 @@ export default function LiveMap({
       </svg>
     `;
 
-    ambulanceMarker.current = new maplibregl.Marker({ element: el }).setLngLat([YORK_U.lng, YORK_U.lat]).addTo(map.current);
+    ambulanceMarker.current = new maplibregl.Marker({ element: el }).setLngLat([DEFAULT_CENTER.lng, DEFAULT_CENTER.lat]).addTo(map.current);
 
     map.current.on('load', () => {
       map.current?.addSource('aegis-route', {
@@ -544,7 +544,7 @@ export default function LiveMap({
       }
 
       const cur = ambulanceMarker.current?.getLngLat();
-      const start = cur ? { lat: cur.lat, lng: cur.lng } : { lat: YORK_U.lat, lng: YORK_U.lng };
+      const start = cur ? { lat: cur.lat, lng: cur.lng } : { lat: DEFAULT_CENTER.lat, lng: DEFAULT_CENTER.lng };
 
       const destination = endOverride ?? endPoint;
       if (!destination) {
@@ -728,7 +728,7 @@ export default function LiveMap({
   const fetchBothAlgoStats = async () => {
     setIsFetchingStats(true);
     const cur = ambulanceMarker.current?.getLngLat();
-    const start = cur ? { lat: cur.lat, lng: cur.lng } : { lat: YORK_U.lat, lng: YORK_U.lng };
+    const start = cur ? { lat: cur.lat, lng: cur.lng } : { lat: DEFAULT_CENTER.lat, lng: DEFAULT_CENTER.lng };
     const body = {
       start,
       end: endPoint,
@@ -759,9 +759,8 @@ export default function LiveMap({
   };
 
   // Fetch both algorithms with exploration data for the algorithm race mini-map
-  // MARKHAM STOUFFVILLE HOSPITAL — always the target for the algo race
-  // MARKHAM STOUFFVILLE HOSPITAL — always the target for the algo race
-  const MARKHAM_STOUFFVILLE_HOSPITAL = { lat: 43.88490014913164, lng: -79.23290206069066 };
+  // Howard University Hospital — target for cardiac arrest algo race
+  const ALGO_RACE_TARGET = HOWARD_UNIV_HOSPITAL;
 
   const fetchAlgoRace = async (scenario: any) => {
     // Guards against stale responses if the user flips scenarios quickly.
@@ -781,8 +780,8 @@ export default function LiveMap({
     });
 
     // Always use the scenario's fixed start so paths are deterministic
-    const start = scenario.start || { lat: 43.85421582751821, lng: -79.311760971958 };
-    const end = MARKHAM_STOUFFVILLE_HOSPITAL;
+    const start = scenario.start || DEFAULT_CENTER;
+    const end = ALGO_RACE_TARGET;
 
     const body = {
       start,
@@ -1095,11 +1094,11 @@ export default function LiveMap({
       setIsRouting(true);
       setRouteError(null);
 
-      // Use autocomplete endpoint (York Region scoped) and take the first result
+      // Use autocomplete endpoint (DMV area scoped) and take the first result
       const res = await api.get('/api/algo/autocomplete', { params: { q: destQuery.trim() } });
       const results = res.data?.results || [];
       if (!results.length) {
-        setRouteError('No addresses found in York Region. Try a more specific query.');
+        setRouteError('No addresses found in the DMV area. Try a more specific query.');
         setIsRouting(false);
         return;
       }
@@ -1113,7 +1112,7 @@ export default function LiveMap({
       setRouteError(
         e?.response?.data?.detail ||
         e?.message ||
-        'Geocode failed. Try a more specific address in York Region.'
+        'Geocode failed. Try a more specific address in the DMV area.'
       );
       setIsRouting(false);
     }
@@ -1399,7 +1398,7 @@ export default function LiveMap({
             <input
               value={destQuery}
               onChange={(e) => onInputChange(e.target.value)}
-              placeholder="Enter address in York Region"
+              placeholder="Enter address in DMV area"
               className="bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white w-64 outline-none focus:border-cyan-500/50 transition-colors"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -1572,9 +1571,9 @@ export default function LiveMap({
           <button
             onClick={() => {
               setIsOsmowsMode(true);
-              // Zoom out to show York Region
+              // Zoom out to show DMV area
               map.current?.flyTo({
-                center: [-79.3117, 43.8542], // York U center approx
+                center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
                 zoom: 11,
                 pitch: 0,
                 bearing: 0,

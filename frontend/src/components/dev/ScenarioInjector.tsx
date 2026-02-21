@@ -1,25 +1,25 @@
 import React from 'react';
 
-// REAL-WORLD YORK REGION SCENARIO DATA
+// REAL-WORLD DMV AREA SCENARIO DATA
 const SCENARIOS = {
   "CARDIAC_ARREST": {
     title: "CARDIAC ARREST // UNIT 992",
     isRedAlert: true,
-    // Start: Highway 7 & Warden
-    start: { lat: 43.8580, lng: -79.3100 },
-    // End: Markham Stouffville Hospital
-    end: { lat: 43.88490014913164, lng: -79.23290206069066 },
-    aiPrompt: "URGENT: 65yo Male, Cardiac Arrest. Route to Markham Stouffville Hospital immediately.",
+    // Start: DC center
+    start: { lat: 38.9072, lng: -77.0369 },
+    // End: Howard University Hospital
+    end: { lat: 38.9185, lng: -77.0195 },
+    aiPrompt: "URGENT: 65yo Male, Cardiac Arrest. Route to Howard University Hospital immediately.",
     vitals: { hr: 0, bp: "0/0", o2: 45 },
   },
   "MVA_TRAUMA": {
-    title: "MVA TRAUMA // HWY 404",
+    title: "MVA TRAUMA // CAPITOL HILL",
     isRedAlert: true,
-    // Start: 16th Ave & Leslie
-    start: { lat: 43.8600, lng: -79.3700 },
-    // End: Sunnybrook Trauma Centre
-    end: { lat: 43.7220, lng: -79.3760 },
-    aiPrompt: "CRITICAL: Multi-vehicle accident on Hwy 404. Multiple trauma patients. Route to Sunnybrook Trauma Centre. Avoid 404 congestion using side-street pivots.",
+    // Start: Union Station area
+    start: { lat: 38.8977, lng: -77.0065 },
+    // End: Georgetown University Hospital
+    end: { lat: 38.9114, lng: -77.0726 },
+    aiPrompt: "CRITICAL: Multi-vehicle accident on Capitol Hill. Multiple trauma patients. Route to Georgetown University Hospital. Avoid congestion using side-street pivots.",
     vitals: { hr: 115, bp: "90/60", o2: 92 },
   },
 };

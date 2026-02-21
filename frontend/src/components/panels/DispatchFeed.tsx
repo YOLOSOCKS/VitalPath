@@ -4,7 +4,7 @@ const CARDIAC_ARREST_LOGS = [
   { time: "00:00", sender: "DISPATCH", msg: "Cardiac arrest, CPR in progress. Priority transport." },
   { time: "00:01", sender: "SYSTEM", msg: "ROUTE CALCULATED: DUAN-MAO OPTIMIZED" },
   { time: "00:03", sender: "RECEIVING", msg: "ER notified, resuscitation bay prepping." },
-  { time: "00:05", sender: "DISPATCH", msg: "Traffic advisory: heavy congestion near Highway 7; reroute active." },
+  { time: "00:05", sender: "DISPATCH", msg: "Traffic advisory: heavy congestion near New York Ave; reroute active." },
   { time: "00:08", sender: "SYSTEM", msg: "V2X SIGNAL: GREEN WAVE REQUESTED [APPROVED]" },
   { time: "00:10", sender: "POLICE", msg: "ON SCENE. SCENE SECURE. BYSTANDER CPR ONGOING." },
   { time: "00:14", sender: "DISPATCH", msg: "UPDATE: PATIENT IS 60M. NO PULSE. AED APPLIED." },
@@ -13,14 +13,14 @@ const CARDIAC_ARREST_LOGS = [
 
 const MVA_TRAUMA_PRE_PICKUP = [
   { time: "00:00", sender: "DISPATCH", msg: "MVA with suspected blunt trauma. Scene safety caution." },
-  { time: "00:01", sender: "SYSTEM", msg: "ROUTE CALCULATED TO SCENE: MARKVILLE MALL" },
+  { time: "00:01", sender: "SYSTEM", msg: "ROUTE CALCULATED TO SCENE: UNION MARKET" },
   { time: "00:03", sender: "POLICE", msg: "Road partially blocked, cones deployed." },
   { time: "00:05", sender: "FIRE", msg: "Extrication in progress; ETA 2 minutes." },
   { time: "00:07", sender: "SYSTEM", msg: "V2X SIGNAL: GREEN WAVE REQUESTED [APPROVED]" },
 ];
 
 const MVA_TRAUMA_POST_PICKUP = [
-  { time: "00:00", sender: "DISPATCH", msg: "Patient loaded, priority transport to Markham Stouffville." },
+  { time: "00:00", sender: "DISPATCH", msg: "Patient loaded, priority transport to Howard University Hospital." },
   { time: "00:01", sender: "SYSTEM", msg: "ROUTE RECALCULATED: TRAUMA CENTER BYPASS" },
   { time: "00:04", sender: "SYSTEM", msg: "Road closure detected: rerouting to maintain ETA." },
   { time: "00:07", sender: "RECEIVING", msg: "Trauma team activated. Blood products standing by." },
@@ -29,8 +29,8 @@ const MVA_TRAUMA_POST_PICKUP = [
 
 const STANDBY_LOGS = [
   { time: "00:00", sender: "SYSTEM", msg: "System online: Standby." },
-  { time: "00:03", sender: "SYSTEM", msg: "Road advisory: construction reported on 16th Avenue." },
-  { time: "00:06", sender: "SYSTEM", msg: "Traffic: moderate congestion near Hwy 7 / Warden Ave." },
+  { time: "00:03", sender: "SYSTEM", msg: "Road advisory: construction reported on Rhode Island Ave." },
+  { time: "00:06", sender: "SYSTEM", msg: "Traffic: moderate congestion near New York Ave / Florida Ave." },
 ];
 
 function getLogsForScenario(scenarioTitle?: string, patientOnBoard?: boolean) {
