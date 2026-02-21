@@ -6,6 +6,7 @@ import PatientVitals from './components/panels/PatientVitals';
 import Navigation from './components/panels/Navigation';
 import DispatchFeed from './components/panels/DispatchFeed';
 import HospitalInfo from './components/panels/HospitalInfo';
+import AITransparency from './pages/AITransparency';
 
 // Error Boundary to catch LiveMap crashes
 class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -90,6 +91,9 @@ const EquipmentPanel = ({ forceOpen, isRedAlert }: { forceOpen?: boolean, isRedA
   );
 };
 
+// Hash-based routing: #/ai-transparency shows AI Transparency page
+const getCurrentView = () => window.location.hash === '#/ai-transparency' ? 'ai-transparency' : 'dashboard';
+
 // --- MAIN APPLICATION ---
 function App() {
   const [showWelcome, setShowWelcome] = useState(true);
@@ -98,7 +102,14 @@ function App() {
   const [navData, setNavData] = useState<any>(null);
   const [time, setTime] = useState(new Date());
   const [audioError, setAudioError] = useState(false);
+  const [currentView, setCurrentView] = useState<'dashboard' | 'ai-transparency'>(getCurrentView);
   const aiRef = useRef<any>(null);
+
+  useEffect(() => {
+    const handler = () => setCurrentView(getCurrentView());
+    window.addEventListener('hashchange', handler);
+    return () => window.removeEventListener('hashchange', handler);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -124,7 +135,7 @@ function App() {
     audio.volume = 1.0;
     audio.play()
       .then(() => {
-        console.log(`AEGIS V-SYNC: Playing local file ${audioPath}`);
+        console.log(`VitalPath AI V-SYNC: Playing local file ${audioPath}`);
         setAudioError(false);
       })
       .catch(e => {
@@ -151,8 +162,24 @@ function App() {
       <header className="h-14 shrink-0 border-b border-white/10 bg-black/50 backdrop-blur-lg flex items-center justify-between px-6 z-50">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold tracking-tighter text-white uppercase">
-            AEGIS <span className="text-cyan-400 text-sm font-normal tracking-widest ml-2">// MISSION_CONTROL</span>
+            VitalPath AI <span className="text-cyan-400 text-sm font-normal tracking-widest ml-2">// MISSION_CONTROL</span>
           </h1>
+          <nav className="flex items-center gap-2 ml-4">
+            <a
+              href="#/"
+              onClick={(e) => { e.preventDefault(); window.location.hash = ''; setCurrentView('dashboard'); }}
+              className={`px-3 py-1.5 rounded font-mono text-xs uppercase tracking-wider transition-all ${currentView === 'dashboard' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50' : 'text-gray-400 border border-transparent hover:text-white hover:border-white/30'}`}
+            >
+              Dashboard
+            </a>
+            <a
+              href="#/ai-transparency"
+              onClick={(e) => { e.preventDefault(); window.location.hash = '#/ai-transparency'; setCurrentView('ai-transparency'); }}
+              className={`px-3 py-1.5 rounded font-mono text-xs uppercase tracking-wider transition-all ${currentView === 'ai-transparency' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50' : 'text-gray-400 border border-transparent hover:text-white hover:border-white/30'}`}
+            >
+              AI Transparency
+            </a>
+          </nav>
           {audioError && (
             <div className="px-2 py-0.5 bg-red-900/40 border border-red-500 rounded text-red-400 text-[10px] font-mono animate-pulse">
               AUDIO_BLOCKED: CLICK HEADER TO UNLOCK
@@ -181,7 +208,11 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 p-4 grid grid-cols-12 gap-4 relative z-10">
+      <main className="flex-1 min-h-0 flex flex-col relative z-10">
+        {currentView === 'ai-transparency' ? (
+          <AITransparency />
+        ) : (
+        <div className="flex-1 min-h-0 p-4 grid grid-cols-12 gap-4">
         <div className="col-span-3 flex flex-col gap-4 h-full min-h-0">
           <DispatchFeed className="h-48 shrink-0" scenarioTitle={activeScenario?.title} patientOnBoard={activeScenario?.patientOnBoard} />
           <AIAssistant
@@ -216,6 +247,8 @@ function App() {
           />
           <HospitalInfo className="flex-[2] min-h-0" />
         </div>
+        </div>
+        )}
       </main>
 
       <div className="absolute inset-0 z-0 pointer-events-none opacity-5"

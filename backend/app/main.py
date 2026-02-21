@@ -7,8 +7,8 @@ from app.services.voice import generate_voice_stream
 
 
 app = FastAPI(
-    title="Aegis API", 
-    description="Backend for Project Aegis - Powered by Duan-Mao Algo & Gemini",
+    title="VitalPath AI API", 
+    description="Backend for VitalPath AI - Powered by Duan-Mao Algo & Gemini",
     version="0.1.0"
 )
 
@@ -37,7 +37,7 @@ app.include_router(algo_router.router, prefix="/api/algo", tags=["algorithm"])
 
 @app.get("/")
 def read_root():
-    return {"system": "Aegis", "status": "operational", "ai_link": "active"}
+    return {"system": "VitalPath AI", "status": "operational", "ai_link": "active"}
 
 @app.post("/api/ai/chat")
 async def chat_endpoint(req: ChatRequest):

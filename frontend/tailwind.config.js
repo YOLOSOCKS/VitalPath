@@ -8,7 +8,7 @@ export default {
     extend: {
       colors: {
         cyan: {
-          400: '#00f0ff', // Aegis Cyan
+          400: '#00f0ff', // VitalPath AI Cyan
           950: '#083344',
         }
       }

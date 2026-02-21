@@ -6,7 +6,7 @@ import google.generativeai as genai
 load_dotenv()
 
 def check_system():
-    print("--- AEGIS SYSTEM DIAGNOSTICS ---")
+    print("--- VitalPath AI SYSTEM DIAGNOSTICS ---")
     
     # 1. Check Gemini
     gemini_key = os.getenv("GEMINI_API_KEY")

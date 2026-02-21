@@ -1,4 +1,4 @@
-# Benchmark methodology (Aegis)
+# Benchmark methodology (VitalPath AI)
 
 This document explains how we produce the benchmark charts in `docs/figures/`.
 
@@ -55,4 +55,4 @@ We recommend keeping result files **out of git** and committing only:
 
 ## Safety / compliance disclaimer
 
-Aegis is a hackathon prototype. Benchmarks represent local engineering measurements and are **not** operational certifications.
+VitalPath AI is a hackathon prototype. Benchmarks represent local engineering measurements and are **not** operational certifications.

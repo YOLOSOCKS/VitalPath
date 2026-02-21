@@ -1,4 +1,4 @@
-# Aegis — Real-Time EMS Navigation, Triage & Algorithmic Routing Telemetry
+# VitalPath AI — Real-Time EMS Navigation, Triage & Algorithmic Routing Telemetry
 
 ![status](https://img.shields.io/badge/status-hackathon%20prototype-orange)
 ![domain](https://img.shields.io/badge/domain-healthcare%20%26%20re--engineering-blue)
@@ -11,7 +11,7 @@
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
 > **Not a medical device. Not for real patient care or live dispatch.**  
-> Aegis is a hackathon prototype built to demonstrate how modern routing + UI telemetry + AI can reduce cognitive load and improve arrival times in emergency response.
+> VitalPath AI is a hackathon prototype built to demonstrate how modern routing + UI telemetry + AI can reduce cognitive load and improve arrival times in emergency response.
 
 ### 🏅**Winner:** [York Region's Best Community Impact Hack Winner](https://ctrl-hack-del-2.devpost.com)
 
@@ -24,7 +24,7 @@
 
 ## Executive summary
 
-**Aegis** is a paramedic/first-responder “mission control” dashboard that combines:
+**VitalPath AI** is a paramedic/first-responder “mission control” dashboard that combines:
 
 - **Road-law–aware routing** on real OpenStreetMap drive networks (directed roads, one-ways)
 - **GPS-style simulation** + turn-by-turn navigation telemetry (ETA, next maneuver, distance to next)
@@ -118,19 +118,19 @@ Dijkstra is the standard single-source shortest path approach with non-negative 
 ### Experimental accelerator: Duan–Mao BM-SSSP (“Breaking the Sorting Barrier”)
 Recent research (Duan et al.) describes a deterministic directed SSSP algorithm with improved asymptotic runtime in certain models, often described as “breaking the sorting barrier.”
 
-In Aegis, BM-SSSP is integrated as:
+In VitalPath AI, BM-SSSP is integrated as:
 - A **TypeScript Node runner** (`backend/bmssp-runner/`) invoked by the Python backend
 - Backend converts the OSMnx graph into an edge list and requests a predecessor tree
 - Path is reconstructed from predecessors; exploration lines are derived from predecessor edges
 - A **persistent Node server runner** (`server.mjs`) is used by default to avoid per-request Node startup overhead
-- If BM-SSSP fails, Aegis **falls back to Dijkstra** automatically (demo reliability)
+- If BM-SSSP fails, VitalPath AI **falls back to Dijkstra** automatically (demo reliability)
 
 **References**
 - Paper: https://arxiv.org/abs/2504.17033  
 - Runner inspiration: https://github.com/Braeniac/bm-sssp
 
 > Reality check: BM-SSSP may not beat Dijkstra on small graphs due to constants and overhead.  
-> That’s exactly why Aegis ships both — and visualizes the tradeoffs clearly via telemetry + benchmarks.
+> That’s exactly why VitalPath AI ships both — and visualizes the tradeoffs clearly via telemetry + benchmarks.
 
 ---
 ## Benchmarks & Figures
@@ -416,7 +416,7 @@ pip install scikit-learn
 ```
 
 ### Nominatim returns no results / rate limiting
-Nominatim is rate-limited; Aegis enforces a minimum interval and caches results.
+Nominatim is rate-limited; VitalPath AI enforces a minimum interval and caches results.
 If you’re offline, use the dev scenarios.
 
 ### AlgoRace not visible
@@ -436,7 +436,7 @@ AlgoRace is shown when:
 ---
 
 ## Data attribution & licensing
-Aegis uses **OpenStreetMap** data via OSMnx / Overpass and geocoding via Nominatim.  
+VitalPath AI uses **OpenStreetMap** data via OSMnx / Overpass and geocoding via Nominatim.  
 OpenStreetMap data is licensed under **ODbL** — see https://www.openstreetmap.org/copyright.
 
 ---

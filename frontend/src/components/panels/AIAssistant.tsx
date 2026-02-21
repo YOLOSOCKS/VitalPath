@@ -11,7 +11,7 @@ interface Message {
 const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'ai', text: 'AEGIS SYSTEM ONLINE. READY FOR TRIAGE SUPPORT.', timestamp: 'NOW' }
+    { role: 'ai', text: 'VitalPath AI SYSTEM ONLINE. READY FOR TRIAGE SUPPORT.', timestamp: 'NOW' }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
@@ -34,7 +34,7 @@ const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
       if (isVoiceEnabled && shouldSpeak) {
         await handleVoicePlay(text);
       } else {
-        console.log("AEGIS LOG: Scenario local audio active. ElevenLabs API bypassed.");
+        console.log("VitalPath AI LOG: Scenario local audio active. ElevenLabs API bypassed.");
       }
     }
   }));
@@ -123,7 +123,7 @@ const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
       <div className="p-3 border-b border-white/10 bg-white/5 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase">
-            AEGIS AI // TRIAGE
+            VitalPath AI // TRIAGE
           </h2>
           <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-yellow-400 animate-ping' : 'bg-green-500'}`} />
         </div>

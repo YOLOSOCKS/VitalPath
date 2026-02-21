@@ -1,8 +1,8 @@
 """
-Aegis Benchmark Runner
-=====================
+VitalPath AI Benchmark Runner
+=============================
 
-Creates repeatable performance measurements against the Aegis routing endpoint:
+Creates repeatable performance measurements against the VitalPath AI routing endpoint:
 
     POST /api/algo/calculate
 
@@ -128,7 +128,7 @@ def _post_json(url: str, payload: Dict[str, Any], timeout_s: int) -> Tuple[int, 
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Run Aegis routing benchmarks and write JSONL.")
+    ap = argparse.ArgumentParser(description="Run VitalPath AI routing benchmarks and write JSONL.")
     ap.add_argument("--api", default=None, help="API base, e.g. http://127.0.0.1:8000 (overrides cases file).")
     ap.add_argument("--endpoint", default=None, help="Full endpoint URL (overrides api + default path).")
     ap.add_argument("--cases", default=str(DEFAULT_CASES), help="Path to bench_cases.json")

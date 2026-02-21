@@ -1,6 +1,6 @@
-# Aegis Bench (Data Generator)
+# VitalPath AI Bench (Data Generator)
 
-This folder contains a small benchmark runner for Aegis.
+This folder contains a small benchmark runner for VitalPath AI.
 
 It repeatedly calls the routing endpoint:
 - `POST /api/algo/calculate`

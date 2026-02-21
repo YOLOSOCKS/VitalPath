@@ -1,5 +1,5 @@
 """
-Aegis Bench Figure Generator
+VitalPath AI Bench Figure Generator
 ----------------------------
 
 Reads JSONL output produced by `backend/bench/run_bench.py` and writes charts into docs/figures/.
@@ -389,7 +389,7 @@ def generate_all(jsonl_path: Path, out_dir: Path, theme: str) -> Path:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Generate benchmark figures for Aegis.")
+    ap = argparse.ArgumentParser(description="Generate benchmark figures for VitalPath AI.")
     ap.add_argument("--input", required=False, help="Path to JSONL results file")
     ap.add_argument("--out", default="docs/figures", help="Output directory for PNG figures")
     ap.add_argument("--theme", choices=["dark", "light"], default="dark", help="Plot theme")

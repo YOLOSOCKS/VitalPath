@@ -98,7 +98,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                         textShadow: '0 0 40px rgba(0, 240, 255, 0.3), 0 0 80px rgba(0, 240, 255, 0.1)',
                     }}
                 >
-                    AEGIS
+                    VitalPath AI
                 </h1>
 
                 <motion.div

@@ -676,7 +676,7 @@ export default function AlgoRaceMiniMap({
           {expanded && stats && (
             <div className="col-span-4 border-l border-white/10 bg-black/70 p-3 flex flex-col gap-3 overflow-y-auto">
               <div>
-                <div className="text-[10px] font-mono text-blue-400 uppercase tracking-wider">Aegis Algo Terminal</div>
+                <div className="text-[10px] font-mono text-blue-400 uppercase tracking-wider">VitalPath AI Algo Terminal</div>
                 <div className="text-[12px] font-mono text-gray-100">Routing Engine Race</div>
               </div>
 
