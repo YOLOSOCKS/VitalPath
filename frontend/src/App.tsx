@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import LiveMap from './components/Map';
 import WelcomeScreen from './components/WelcomeScreen';
 import AIAssistant from './components/panels/AIAssistant';
 import PatientVitals from './components/panels/PatientVitals';
 import Navigation from './components/panels/Navigation';
-import DispatchFeed from './components/panels/DispatchFeed';
 import HospitalInfo from './components/panels/HospitalInfo';
+import MissionDetailsPanel, { type OrganPlanSummary } from './components/panels/MissionDetailsPanel';
 import AITransparency from './pages/AITransparency';
+
+const api = axios.create({ baseURL: (import.meta as any).env?.VITE_API_BASE || '' });
 
 // Error Boundary to catch LiveMap crashes
 class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -36,63 +39,6 @@ class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 }
 
 
-// --- CARGO CONTAINER DIAGNOSTICS (temperature, shock, lid, battery) ---
-const EquipmentPanel = ({ forceOpen, isRedAlert, cargoTelemetry }: { forceOpen?: boolean; isRedAlert?: boolean; cargoTelemetry?: { temperature_c?: number; shock_g?: number; lid_closed?: boolean; battery_percent?: number } }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  useEffect(() => { if (forceOpen) setIsOpen(true); }, [forceOpen]);
-  const temp = cargoTelemetry?.temperature_c ?? 4.5;
-  const shock = cargoTelemetry?.shock_g ?? 0;
-  const lid = cargoTelemetry?.lid_closed ?? true;
-  const battery = cargoTelemetry?.battery_percent ?? 88;
-  const tempOk = temp >= 2 && temp <= 8;
-  const lidOk = lid;
-
-  return (
-    <div
-      onClick={() => setIsOpen(!isOpen)}
-      className={`bg-black/60 backdrop-blur-xl border rounded-xl transition-all duration-500 ease-in-out cursor-pointer overflow-hidden flex flex-col 
-        ${isOpen ? 'h-80' : 'h-12 hover:bg-white/5'} 
-        ${isRedAlert ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-white/10'}`}
-    >
-      <div className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-white/5">
-        <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${isOpen ? 'bg-cyan-400 shadow-[0_0_10px_#00f0ff]' : tempOk && lidOk ? 'bg-green-500' : 'bg-red-500'}`} />
-          CONTAINER TELEMETRY
-        </h2>
-        <span className="text-gray-500 text-[10px] font-mono">{isOpen ? '▼' : '▲'}</span>
-      </div>
-      <div className={`flex-1 p-3 grid grid-cols-2 gap-2 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
-        <div className={`rounded p-2 border ${tempOk ? 'bg-white/5 border-white/10' : 'bg-red-950/30 border-red-500/50'}`}>
-          <div className="text-gray-400 text-[9px] font-mono uppercase">Temperature</div>
-          <div className={`text-lg font-mono font-bold leading-tight ${tempOk ? 'text-green-400' : 'text-red-400'}`}>{temp.toFixed(1)} <span className="text-[10px] font-normal">°C</span></div>
-          <div className="text-[9px] text-gray-500 font-mono">Cold-chain 2–8°C</div>
-        </div>
-        <div className="bg-white/5 rounded p-2 border border-white/10">
-          <div className="text-gray-400 text-[9px] font-mono uppercase">Shock (g)</div>
-          <div className={`text-lg font-mono font-bold leading-tight ${shock > 2 ? 'text-amber-400' : 'text-cyan-400'}`}>{shock.toFixed(2)}g</div>
-        </div>
-        <div className="bg-white/5 rounded p-2 border border-white/10">
-          <div className="text-gray-400 text-[9px] font-mono uppercase">Lid seal</div>
-          <div className={`text-base font-mono font-bold uppercase ${lidOk ? 'text-green-400' : 'text-red-400'}`}>{lidOk ? 'Sealed' : 'Open / Compromised'}</div>
-        </div>
-        <div className="bg-white/5 rounded p-2 border border-white/10">
-          <div className="text-gray-400 text-[9px] font-mono uppercase">Battery</div>
-          <div className="text-lg text-cyan-400 font-mono font-bold leading-tight">{battery}%</div>
-          <div className="w-full bg-gray-800 h-1 mt-1 rounded-full overflow-hidden">
-            <div className={`h-full ${battery < 20 ? 'bg-amber-500' : 'bg-cyan-500'}`} style={{ width: `${Math.min(100, battery)}%` }} />
-          </div>
-        </div>
-        <div className="bg-white/5 rounded p-2 border border-white/10 col-span-2">
-          <div className="text-gray-400 text-[9px] font-mono uppercase">Viability</div>
-          <div className={`text-sm font-mono font-bold ${tempOk && lidOk && shock <= 2 ? 'text-green-400' : 'text-amber-400'}`}>
-            {tempOk && lidOk && shock <= 2 ? 'Within spec — monitor' : 'Check — risk flagged'}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // Hash-based routing: #/ai-transparency shows AI Transparency page
 const getCurrentView = () => window.location.hash === '#/ai-transparency' ? 'ai-transparency' : 'dashboard';
 
@@ -105,7 +51,30 @@ function App() {
   const [time, setTime] = useState(new Date());
   const [audioError, setAudioError] = useState(false);
   const [currentView, setCurrentView] = useState<'dashboard' | 'ai-transparency'>(getCurrentView);
+  const [organPlan, setOrganPlan] = useState<OrganPlanSummary | null>(null);
+  const [backendUnreachable, setBackendUnreachable] = useState(false);
   const aiRef = useRef<any>(null);
+
+  // Detect when backend is not running (proxy ECONNREFUSED → 502, or network error)
+  useEffect(() => {
+    const onRejected = (err: any) => {
+      const status = err?.response?.status;
+      const msg = err?.message ? String(err.message) : '';
+      if (
+        err?.code === 'ECONNREFUSED' ||
+        msg.includes('ECONNREFUSED') ||
+        msg.includes('Network Error') ||
+        status === 502 ||
+        status === 503 ||
+        status === 504
+      ) {
+        setBackendUnreachable(true);
+      }
+      return Promise.reject(err);
+    };
+    const id = api.interceptors.response.use((r) => r, onRejected);
+    return () => api.interceptors.response.eject(id);
+  }, []);
 
   useEffect(() => {
     const handler = () => setCurrentView(getCurrentView());
@@ -123,29 +92,47 @@ function App() {
   }, [isRedAlert]);
 
   const handleScenarioInject = (scenario: any) => {
-    setIsRedAlert(scenario.isRedAlert);
+    // Cargo alert is driven only by cargo conditions (PatientVitals onCargoIssueChange), not by scenario
     setActiveScenario(scenario);
 
-    // 1. DETERMINE FILE NAME (alert tone for cargo-risk scenarios)
+    // Auto-fetch organ transport plan (donor/recipient/organ) so we show mission details and transport mode — no address input
+    const donor = scenario.donor_hospital;
+    const recipient = scenario.recipient_hospital;
+    const organ = scenario.organ_type || 'liver';
+    if (donor && recipient) {
+      api.post('/api/vitalpath/plan/organ-transport', {
+        donor_hospital: donor,
+        recipient_hospital: recipient,
+        organ_type: organ,
+      })
+        .then((res) => {
+          const d = res.data;
+          setOrganPlan({
+            donor_hospital: donor,
+            recipient_hospital: recipient,
+            organ_type: organ,
+            transport_mode: d.transport_mode || 'road',
+            risk_status: d.risk_status || 'low',
+            recommendation: d.recommendation || '',
+            max_safe_time_s: d.max_safe_time_s ?? 0,
+            eta_total_s: d.eta_total_s ?? 0,
+            alerts: d.alerts || [],
+          });
+        })
+        .catch(() => setOrganPlan(null));
+    } else {
+      setOrganPlan(null);
+    }
+
+    // 1. Alert tone
     const fileName = scenario.isRedAlert ? 'trauma.mp3' : 'routine.mp3';
-
-    // 2. CONSTRUCT WEB PATH
     const audioPath = `/audio/${fileName}`;
-
-    // 3. PLAY AUDIO WITH EXPLICIT PLAYBACK
     const audio = new Audio(audioPath);
     audio.volume = 1.0;
     audio.play()
-      .then(() => {
-        console.log(`VitalPath AI V-SYNC: Playing local file ${audioPath}`);
-        setAudioError(false);
-      })
-      .catch(e => {
-        console.error(`VOICE ERROR: Audio blocked. Click the header button to prime audio.`, e);
-        setAudioError(true);
-      });
+      .then(() => setAudioError(false))
+      .catch(() => setAudioError(true));
 
-    // 4. INJECT MESSAGE INTO AI BRAIN
     if (aiRef.current) {
       aiRef.current.injectSystemMessage(scenario.aiPrompt, false);
     }
@@ -154,12 +141,23 @@ function App() {
   const handleScenarioClear = () => {
     setIsRedAlert(false);
     setActiveScenario(null);
+    setOrganPlan(null);
   };
 
   return (
-    <div className={`w-screen h-screen overflow-hidden flex flex-col transition-all duration-700 ${isRedAlert ? 'bg-red-950/20' : 'bg-[#050505]'}`}>
+    <div className={`w-screen h-screen overflow-hidden flex flex-col transition-all duration-700 ${isRedAlert ? 'bg-red-950/50' : 'bg-[#050505]'}`}>
 
       {showWelcome && <WelcomeScreen onComplete={() => setShowWelcome(false)} />}
+
+      {backendUnreachable && (
+        <div className="absolute top-14 left-0 right-0 z-[100] flex items-center justify-between gap-4 bg-amber-950/95 border-b border-amber-500/50 px-4 py-2 text-amber-200 font-mono text-sm">
+          <span>Backend not running — API calls will fail. Start it in a separate terminal:</span>
+          <code className="bg-black/40 px-2 py-1 rounded text-amber-300 text-xs whitespace-nowrap">
+            cd backend && uvicorn app.main:app --reload --port 8000
+          </code>
+          <button onClick={() => setBackendUnreachable(false)} className="text-amber-400 hover:text-white shrink-0" aria-label="Dismiss">✕</button>
+        </div>
+      )}
 
       <header className="h-14 shrink-0 border-b border-white/10 bg-black/50 backdrop-blur-lg flex items-center justify-between px-6 z-50">
         <div className="flex items-center gap-4">
@@ -215,13 +213,21 @@ function App() {
           <AITransparency />
         ) : (
         <div className="flex-1 min-h-0 p-4 grid grid-cols-12 gap-4">
-        <div className="col-span-3 flex flex-col gap-4 h-full min-h-0">
-          <DispatchFeed className="h-48 shrink-0" scenarioTitle={activeScenario?.title} patientOnBoard={activeScenario?.patientOnBoard} />
+        <div className="col-span-3 flex flex-col gap-4 h-full min-h-0 overflow-y-auto">
+          <MissionDetailsPanel
+            className="shrink-0"
+            plan={organPlan}
+            tripProgressPercent={
+              navData?.total_distance_m != null && navData.total_distance_m > 0
+                ? ((navData.total_distance_m - navData.remaining_distance_m) / navData.total_distance_m) * 100
+                : undefined
+            }
+          />
           <AIAssistant
             ref={aiRef}
-            className={`flex-1 min-h-0 transition-all duration-500 border-cyan-500/30 shadow-[0_0_40px_rgba(0,240,255,0.2)] ${isRedAlert ? 'shadow-[0_0_60px_rgba(239,68,68,0.3)]' : ''}`}
+            className={`shrink-0 transition-all duration-500 border-cyan-500/30 shadow-[0_0_40px_rgba(0,240,255,0.2)] ${isRedAlert ? 'shadow-[0_0_60px_rgba(239,68,68,0.3)]' : ''}`}
           />
-          <EquipmentPanel forceOpen={activeScenario?.isRedAlert} isRedAlert={isRedAlert} cargoTelemetry={activeScenario?.cargoTelemetry} />
+          <HospitalInfo className="shrink-0" />
         </div>
 
         <div className="col-span-6 h-full relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black/20">
@@ -229,6 +235,7 @@ function App() {
           <MapErrorBoundary>
             <LiveMap
               activeScenario={activeScenario}
+              organPlan={organPlan}
               onNavUpdate={setNavData}
               onScenarioInject={handleScenarioInject}
               onScenarioClear={handleScenarioClear}
@@ -239,15 +246,14 @@ function App() {
         </div>
 
         <div className="col-span-3 flex flex-col gap-4 h-full min-h-0">
-          {/* SYNC: Passing activeScenario to Navigation for Turn-by-Turn */}
           <Navigation className="shrink-0" activeScenario={activeScenario} navData={navData} />
           <PatientVitals
-            className="flex-[3] min-h-0"
+            className="flex-1 min-h-0"
             scenarioData={activeScenario?.cargoTelemetry}
             scenarioTitle={activeScenario?.title}
             patientOnBoard={activeScenario?.patientOnBoard}
+            onCargoIssueChange={setIsRedAlert}
           />
-          <HospitalInfo className="flex-[2] min-h-0" />
         </div>
         </div>
         )}

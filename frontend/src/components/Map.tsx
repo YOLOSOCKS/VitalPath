@@ -3,8 +3,6 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import axios from 'axios';
 import AlgoRaceMiniMap, { AlgoRaceData } from './AlgoRaceMiniMap';
-import { OSMOWS_LOCATIONS } from '../constants/OsmowsLocations';
-
 type LatLng = { lat: number; lng: number };
 
 export type NavLive = {
@@ -142,13 +140,17 @@ const HOWARD_UNIV_HOSPITAL = { lat: 38.9185, lng: -77.0195 };
 const GEORGETOWN_UNIV_HOSPITAL = { lat: 38.9114, lng: -77.0726 };
 const UNION_MARKET = { lat: 38.9086, lng: -76.9873 };
 
+// Donor/recipient/organ for plan API (auto-destination, no address input)
 const SCENARIOS: Record<string, any> = {
   ORGAN_TRANSPORT: {
     title: 'ORGAN TRANSPORT // COLD-CHAIN ACTIVE',
-    isRedAlert: true,
+    isRedAlert: false,
     start: DEFAULT_CENTER,
     end: HOWARD_UNIV_HOSPITAL,
     destName: 'Howard University Hospital — Transplant Center',
+    donor_hospital: 'georgetown',
+    recipient_hospital: 'howard university hospital',
+    organ_type: 'liver',
     aiPrompt: 'Life-critical organ shipment en route. Cold-chain 2–8°C monitored. Lid sealed, battery nominal. Recommend continuous monitoring; ETA within safe window.',
     cargoTelemetry: { temperature_c: 4.2, shock_g: 0.1, lid_closed: true, battery_percent: 92, elapsed_time_s: 0 },
     patientOnBoard: true,
@@ -160,6 +162,9 @@ const SCENARIOS: Record<string, any> = {
     waypoints: [UNION_MARKET],
     end: GEORGETOWN_UNIV_HOSPITAL,
     destName: 'Union Market Distribution → Georgetown University Hospital',
+    donor_hospital: 'union market',
+    recipient_hospital: 'georgetown university hospital',
+    organ_type: 'default',
     aiPrompt: 'Blood products transport. Temperature and seal within spec. No shock events. Proceed to destination; verify handoff protocol on arrival.',
     cargoTelemetry: { temperature_c: 3.8, shock_g: 0.3, lid_closed: true, battery_percent: 88, elapsed_time_s: 0 },
     patientOnBoard: false,
@@ -170,19 +175,27 @@ const SCENARIOS: Record<string, any> = {
     start: DEFAULT_CENTER,
     end: HOWARD_UNIV_HOSPITAL,
     destName: 'Howard University Hospital — Emergency Handoff',
+    donor_hospital: 'georgetown',
+    recipient_hospital: 'howard university hospital',
+    organ_type: 'heart',
     aiPrompt: 'CRITICAL: Container seal compromised or temperature drift detected. Assess viability; consider backup transport or expedited handoff. Do not open lid until receiving facility ready.',
     cargoTelemetry: { temperature_c: 7.1, shock_g: 1.2, lid_closed: false, battery_percent: 45, elapsed_time_s: 0 },
     patientOnBoard: true,
   },
 };
 
+// Transport mode display (from organ plan — no address input)
+const MODE_ICON: Record<string, string> = { road: '🚗', air: '✈️', hybrid: '🔀' };
+
 export default function LiveMap({
   activeScenario,
+  organPlan,
   onNavUpdate,
   onScenarioInject,
   onScenarioClear,
 }: {
   activeScenario?: any;
+  organPlan?: { transport_mode?: string; eta_total_s?: number; risk_status?: string } | null;
   onNavUpdate?: (nav: NavLive) => void;
   onScenarioInject?: (s: any) => void;
   onScenarioClear?: () => void;
@@ -193,12 +206,6 @@ export default function LiveMap({
   const destMarker = useRef<maplibregl.Marker | null>(null);
 
 
-
-  // Osmows markers refs
-  const osmowsMarkersRef = useRef<maplibregl.Marker[]>([]);
-
-  // Osmows tracking
-  const visitedOsmows = useRef<Set<number>>(new Set());
 
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([]);
   const [currentPos, setCurrentPos] = useState<[number, number] | null>(null);
@@ -223,11 +230,9 @@ export default function LiveMap({
 
   // Algorithm Race Mini-Map
   const [algoRaceData, setAlgoRaceData] = useState<AlgoRaceData | null>(null);
+
   const [showAlgoRace, setShowAlgoRace] = useState(false);
   const algoRaceReqIdRef = useRef(0);
-
-  // Easter Egg Mode
-  const [isOsmowsMode, setIsOsmowsMode] = useState(false);
 
   // Dynamic Roadblock Injection
   const [activeRoadblocks, setActiveRoadblocks] = useState<[number, number][]>([]);
@@ -303,26 +308,6 @@ export default function LiveMap({
   useEffect(() => {
     activeWaypointIdxRef.current = activeWaypointIdx;
   }, [activeWaypointIdx]);
-
-  // Toggle Osmows visibility based on mode
-  useEffect(() => {
-    if (!map.current) return;
-
-    // Clear existing DOM markers
-    osmowsMarkersRef.current.forEach(m => m.remove());
-    osmowsMarkersRef.current = [];
-
-    if (isOsmowsMode) {
-      OSMOWS_LOCATIONS.forEach((loc) => {
-        // Use standard marker with red color - most reliable
-        const marker = new maplibregl.Marker({ color: '#ef4444' })
-          .setLngLat([loc.lng, loc.lat])
-          .addTo(map.current!);
-
-        osmowsMarkersRef.current.push(marker);
-      });
-    }
-  }, [isOsmowsMode]);
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
@@ -412,12 +397,10 @@ export default function LiveMap({
         },
         paint: {
           'text-color': '#ffffff',
+
+
         },
       });
-
-      // Osmows markers - REMOVED LAYER APPROACH, USING DOM MARKERS NOW
-      // Logic handled in isOsmowsMode useEffect
-
 
       // Don't auto-route on load — wait for user to search a destination
 
@@ -464,11 +447,9 @@ export default function LiveMap({
     roadblocksRef.current = [];
     stoppedAtRoadblock.current = false;
     roadblockStopIdx.current = null;
+
     pendingRerouteRef.current = null;
     if (rerouteIntervalRef.current) { clearInterval(rerouteIntervalRef.current); rerouteIntervalRef.current = null; }
-
-    // Reset visited Osmows on new scenario
-    visitedOsmows.current.clear();
 
     // Prevent full reset if this is just a status update (e.g. patient pickup)
     if (activeScenario?.title === prevScenarioTitleRef.current && activeScenario?.patientOnBoard !== prevPatientStatusRef.current) {
@@ -1402,69 +1383,43 @@ export default function LiveMap({
 
       </div>
 
-      {/* Destination input with autocomplete */}
+      {/* Transport mode + ETA + controls (replaces address input — destination from mission/scenario) */}
       <div className="absolute top-4 right-4 z-50">
         <div className="bg-black/80 backdrop-blur-xl p-3 rounded-lg border border-white/10 flex gap-2 items-center">
-          <div className="relative">
-            <input
-              value={destQuery}
-              onChange={(e) => onInputChange(e.target.value)}
-              placeholder="Enter address in DMV area"
-              className="bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white w-64 outline-none focus:border-cyan-500/50 transition-colors"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setShowSuggestions(false);
-                  // If route already loaded, Enter starts animation
-                  if (routeReady) { startAnimation(); return; }
-                  handleGeocode();
-                }
-                if (e.key === 'Escape') setShowSuggestions(false);
-              }}
-              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-              onBlur={() => { setTimeout(() => setShowSuggestions(false), 200); }}
-            />
-
-            {/* Autocomplete dropdown */}
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-black/95 backdrop-blur-xl border border-cyan-500/30 rounded-lg overflow-hidden shadow-[0_8px_32px_rgba(0,240,255,0.15)]">
-                {suggestions.map((s, i) => (
-                  <button
-                    key={i}
-                    className="w-full text-left px-3 py-2 text-[11px] text-gray-300 hover:bg-cyan-500/15 hover:text-cyan-200 transition-colors border-b border-white/5 last:border-b-0 flex items-start gap-2"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => handleSelectSuggestion(s)}
-                  >
-                    <span className="text-cyan-500 mt-px shrink-0">📍</span>
-                    <span className="line-clamp-2 leading-tight">{s.display_name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
+          {!activeScenario ? (
+            <span className="text-gray-500 font-mono text-xs px-2">Select a scenario to start</span>
+          ) : (
+            <>
+              {organPlan?.transport_mode && (
+                <span className="text-lg" title={organPlan.transport_mode}>
+                  {MODE_ICON[organPlan.transport_mode] || '🚗'}
+                </span>
+              )}
+              <span className="text-cyan-400 font-mono text-xs uppercase tracking-wider">
+                {organPlan?.transport_mode ?? 'Road'}
+              </span>
+              <span className="text-gray-500 font-mono text-[10px]">
+                ETA {routeRef.current?.totalTime != null
+                  ? formatEta(routeRef.current.totalTime)
+                  : organPlan?.eta_total_s != null
+                    ? formatEta(organPlan.eta_total_s)
+                    : '--:--'}
+              </span>
+            </>
+          )}
           <button
-            onClick={() => {
-              setShowSuggestions(false);
-              if (routeReady) {
-                startAnimation();
-              } else {
-                handleGeocode();
-              }
-            }}
-            disabled={isRouting || simRunning}
-            className={`px-3 py-1 rounded border text-xs font-mono ${isRouting || simRunning
+            onClick={() => routeReady && startAnimation()}
+            disabled={isRouting || simRunning || !routeReady}
+            className={`px-3 py-1 rounded border text-xs font-mono ${isRouting || simRunning || !routeReady
               ? 'bg-white/5 border-white/10 text-gray-400 cursor-not-allowed'
-              : routeReady
-                ? 'bg-green-500/20 border-green-400/40 text-green-300 hover:bg-green-500/30 animate-pulse'
-                : 'bg-cyan-500/20 border-cyan-400/40 text-cyan-300 hover:bg-cyan-500/30'
+              : 'bg-green-500/20 border-green-400/40 text-green-300 hover:bg-green-500/30 animate-pulse'
               }`}
           >
             {isRouting ? '...' : simRunning ? 'MOVING' : routeReady ? '▶ GO' : 'GO'}
           </button>
           <button
             onClick={() => setIsFollowing((v) => !v)}
-            className={`px-2 py-1 rounded border text-xs font-mono ${isFollowing ? 'border-cyan-400/50 text-cyan-300' : 'border-white/10 text-gray-400'
-              }`}
+            className={`px-2 py-1 rounded border text-xs font-mono ${isFollowing ? 'border-cyan-400/50 text-cyan-300' : 'border-white/10 text-gray-400'}`}
           >
             {isFollowing ? 'FOLLOW' : 'FREE'}
           </button>
@@ -1477,8 +1432,6 @@ export default function LiveMap({
               ✕
             </button>
           )}
-
-
         </div>
       </div>
 
@@ -1519,22 +1472,26 @@ export default function LiveMap({
             <div>
               <div className="text-[10px] text-cyan-500/60 font-mono font-bold uppercase tracking-wider mb-2">Tactical Injections</div>
               <div className="flex flex-col gap-1.5">
-                {Object.entries(SCENARIOS).map(([key, data]) => (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      // Spread to create fresh reference so useEffect always re-fires
-                      onScenarioInject?.({ ...data });
-                      if (data.isRedAlert) fetchAlgoRace(data);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-[10px] font-mono font-bold rounded-lg border transition-all duration-300 hover:scale-[1.02] active:scale-95 ${data.isRedAlert
+                {Object.entries(SCENARIOS).map(([key, data]) => {
+                  const isOrganTransport = key === 'ORGAN_TRANSPORT';
+                  const btnClass = isOrganTransport
+                    ? 'border-blue-400 text-blue-300 bg-blue-500/20 hover:bg-blue-500/40 hover:text-white hover:border-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.25)]'
+                    : data.isRedAlert
                       ? 'border-red-500/40 text-red-500 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_rgba(239,68,68,0.15)]'
-                      : 'border-cyan-500/40 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500 hover:text-white shadow-[0_0_15px_rgba(0,240,255,0.15)]'
-                      }`}
-                  >
-                    {key.replace(/_/g, ' ')}
-                  </button>
-                ))}
+                      : 'border-cyan-500/40 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500 hover:text-white shadow-[0_0_15px_rgba(0,240,255,0.15)]';
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        onScenarioInject?.({ ...data });
+                        if (data.isRedAlert) fetchAlgoRace(data);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-[10px] font-mono font-bold rounded-lg border transition-all duration-300 hover:scale-[1.02] active:scale-95 ${btnClass}`}
+                    >
+                      {key.replace(/_/g, ' ')}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1569,76 +1526,16 @@ export default function LiveMap({
               setShowAlgoRace(false);
             }
           }}
-          className={`px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 ${showEtaPanel
-            ? 'bg-cyan-500/30 border-cyan-400/50 text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.2)]'
-            : 'bg-black/80 backdrop-blur-xl border-white/10 text-gray-400 hover:text-cyan-300 hover:border-cyan-500/30'
-            }`}
+          className={
+            showEtaPanel
+              ? 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-cyan-500/30 border-cyan-400/50 text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.2)]'
+              : 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-black/80 backdrop-blur-xl border-white/10 text-gray-400 hover:text-cyan-300 hover:border-cyan-500/30'
+          }
         >
           {showEtaPanel ? '✕ DEV' : '⚙ DEV'}
         </button>
 
-        {/* EASTER EGG TRIGGER */}
-        {showEtaPanel && (
-          <button
-            onClick={() => {
-              setIsOsmowsMode(true);
-              // Zoom out to show DMV area
-              map.current?.flyTo({
-                center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
-                zoom: 11,
-                pitch: 0,
-                bearing: 0,
-                essential: true
-              });
-            }}
-            className="px-3 py-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-400 text-xs font-mono font-bold hover:bg-orange-500/30 transition-all"
-            title="Deploy Tactical Nutrition"
-          >
-            🌯
-          </button>
-        )}
       </div>
-
-      {/* EASTER EGG OVERLAY */}
-      {isOsmowsMode && (
-        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-start pointer-events-none pt-12">
-          {/* Dark vignette to focus on map - removing this to not obscure map */}
-          {/* <div className="absolute inset-0 bg-black/40 pointer-events-auto" /> */}
-
-          <div className="relative z-10 p-6 flex flex-col items-center gap-3 text-center bg-black/90 backdrop-blur-md rounded-2xl border border-orange-500/30 shadow-[0_0_50px_rgba(249,115,22,0.3)] max-w-sm pointer-events-auto">
-
-            {/* Close X Button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsOsmowsMode(false);
-                if (ambulanceMarker.current) {
-                  const pos = ambulanceMarker.current.getLngLat();
-                  map.current?.flyTo({
-                    center: pos,
-                    zoom: 16,
-                    pitch: 70,
-                    bearing: smoothBearingRef.current || 0,
-                    essential: true
-                  });
-                }
-              }}
-              className="absolute top-2 right-2 p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all cursor-pointer z-50"
-            >
-              ✕
-            </button>
-
-            <h2 className="text-xl font-black text-orange-500 tracking-tighter uppercase drop-shadow-[0_0_15px_rgba(249,115,22,0.8)] leading-none text-center">
-              NUTRITIONAL<br />DEFICIT DETECTED
-            </h2>
-
-            <p className="text-gray-300 font-mono text-xs leading-relaxed">
-              CRITICAL: <span className="text-orange-400 font-bold">OSMOW'S</span> LEVEL CRITICALLY LOW. <br />
-              PLEASE REFUEL AT THE NEAREST LOCATION ASAP.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Algorithm Race Mini-Map (bottom-right) */}
       <AlgoRaceMiniMap data={algoRaceData} visible={showAlgoRace} />

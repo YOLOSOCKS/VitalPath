@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { NavLive } from '../Map';
 
 function formatEta(seconds: number): string {
@@ -24,13 +24,13 @@ export default function Navigation({
   activeScenario?: any;
   navData?: NavLive | null;
 }) {
+  const [isOpen, setIsOpen] = useState(true);
   const rawDistance = navData ? navData.distance_to_next_m : 0;
   const dist = formatDistance(rawDistance);
   const nextTurn = navData?.next_instruction || 'AWAITING ROUTE';
   const street = navData?.current_street || '--';
   const eta = navData ? formatEta(navData.eta_remaining_s) : '--:--';
   const remainingKm = navData ? (navData.remaining_distance_m / 1000).toFixed(2) : '--';
-  const algo = navData?.algorithm || 'Duan-Mao (2025) // Edge Relaxation Active';
   const sim = navData ? `SIM x${navData.sim_speedup}` : '';
 
   const arrow =
@@ -43,41 +43,50 @@ export default function Navigation({
           : '↑';
 
   return (
-    <div className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4 flex flex-col justify-between ${className}`}>
-      <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase border-b border-white/5 pb-1">
-        NAV // ROUTE TO DESTINATION
-      </h2>
-
-      <div className="flex flex-col items-center justify-center my-2">
-        <div className="text-4xl text-white font-bold tracking-tighter drop-shadow-[0_0_15px_rgba(0,240,255,0.3)]">
-          {dist.value}
-          <span className="text-lg text-gray-500 ml-1">{dist.unit}</span>
-        </div>
-        <div className="flex items-center gap-2 mt-1">
-          <div className="text-2xl text-cyan-400 font-bold">{arrow}</div>
-          <div className="text-sm text-cyan-300 font-mono font-bold text-center max-w-[220px] leading-tight">
-            {nextTurn}
-          </div>
-        </div>
+    <div
+      onClick={() => setIsOpen(!isOpen)}
+      className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden cursor-pointer transition-all duration-300 hover:bg-white/5 ${className} ${isOpen ? 'min-h-0' : 'h-12 shrink-0'}`}
+    >
+      <div className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-white/5">
+        <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase">
+          NAV // ROUTE TO DESTINATION
+        </h2>
+        <span className="text-gray-500 text-[10px] font-mono">{isOpen ? '▼' : '▲'}</span>
       </div>
 
-      <div className="space-y-2">
-        <div className="bg-white/5 rounded p-2 border border-white/10 flex justify-between items-center">
-          <div>
-            <div className="text-[10px] text-gray-500 font-mono uppercase">Current Road</div>
-            <div className="text-sm text-white font-mono font-bold">{street}</div>
-            <div className="text-[9px] text-gray-500 font-mono mt-1">Remaining: {remainingKm} km</div>
-          </div>
-          <div className="text-right">
-            <div className="text-[10px] text-gray-500 font-mono">ETA</div>
-            <div className={`text-xl font-mono font-bold ${activeScenario?.isRedAlert ? 'text-red-400' : 'text-green-400'} animate-pulse`}>
-              {eta}
+      {isOpen && (
+        <div className="p-4 flex flex-col justify-between flex-1 min-h-0 overflow-y-auto">
+          <div className="flex flex-col items-center justify-center my-2">
+            <div className="text-4xl text-white font-bold tracking-tighter drop-shadow-[0_0_15px_rgba(0,240,255,0.3)]">
+              {dist.value}
+              <span className="text-lg text-gray-500 ml-1">{dist.unit}</span>
             </div>
-            <div className="text-[9px] text-gray-500 font-mono mt-1">{sim}</div>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="text-2xl text-cyan-400 font-bold">{arrow}</div>
+              <div className="text-sm text-cyan-300 font-mono font-bold text-center max-w-[220px] leading-tight">
+                {nextTurn}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="bg-white/5 rounded p-2 border border-white/10 flex justify-between items-center">
+              <div>
+                <div className="text-[10px] text-gray-500 font-mono uppercase">Current Road</div>
+                <div className="text-sm text-white font-mono font-bold">{street}</div>
+                <div className="text-[9px] text-gray-500 font-mono mt-1">Remaining: {remainingKm} km</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-gray-500 font-mono">ETA</div>
+                <div className={`text-xl font-mono font-bold ${activeScenario?.isRedAlert ? 'text-red-400' : 'text-green-400'} animate-pulse`}>
+                  {eta}
+                </div>
+                <div className="text-[9px] text-gray-500 font-mono mt-1">{sim}</div>
+              </div>
+            </div>
           </div>
         </div>
-
-      </div>
+      )}
     </div>
   );
 }

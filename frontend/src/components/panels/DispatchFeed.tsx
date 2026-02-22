@@ -50,7 +50,7 @@ function getLogsForScenario(scenarioTitle?: string, patientOnBoard?: boolean) {
   return STANDBY_LOGS;
 }
 
-export default function DispatchFeed({ className, scenarioTitle, patientOnBoard }: { className?: string; scenarioTitle?: string; patientOnBoard?: boolean }) {
+export default function DispatchFeed({ className, scenarioTitle, patientOnBoard, isOpen, onToggle }: { className?: string; scenarioTitle?: string; patientOnBoard?: boolean; isOpen?: boolean; onToggle?: () => void }) {
   const [logs, setLogs] = useState<typeof ORGAN_TRANSPORT_LOGS>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scenarioKeyRef = useRef<string | undefined>(undefined);
@@ -84,14 +84,23 @@ export default function DispatchFeed({ className, scenarioTitle, patientOnBoard 
     }
   }, [logs]);
 
-  return (
-    <div className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden ${className}`}>
-      <h2 className="p-3 text-cyan-400 font-mono text-sm tracking-widest uppercase border-b border-white/5 bg-white/5 flex justify-between">
-        <span>LIVE UPDATES // TRANSPORT</span>
-        <span className="text-[10px] text-green-500 animate-pulse">● LIVE</span>
-      </h2>
+  const open = isOpen ?? true;
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2 font-mono text-xs">
+  return (
+    <div className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden transition-all duration-300 ${className} ${open ? 'min-h-0' : 'h-12 shrink-0'}`}>
+      <div
+        onClick={onToggle}
+        className="h-12 shrink-0 p-3 text-cyan-400 font-mono text-sm tracking-widest uppercase border-b border-white/5 bg-white/5 flex justify-between items-center cursor-pointer hover:bg-white/5"
+      >
+        <span>TRANSPORT</span>
+        <span className="flex items-center gap-2">
+          <span className="text-[10px] text-green-500 animate-pulse">● LIVE</span>
+          <span className="text-gray-500 text-[10px] font-mono">{open ? '▼' : '▲'}</span>
+        </span>
+      </div>
+
+      {open && (
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 font-mono text-xs">
         {logs.length === 0 && (
           <div className="text-gray-600 italic">CONNECTING...</div>
         )}
@@ -110,6 +119,7 @@ export default function DispatchFeed({ className, scenarioTitle, patientOnBoard 
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

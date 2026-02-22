@@ -9,11 +9,13 @@ interface CargoTelemetry {
   elapsed_time_s?: number;
 }
 
-export default function PatientVitals({ className, scenarioData, scenarioTitle, patientOnBoard }: {
+export default function PatientVitals({ className, scenarioData, scenarioTitle, patientOnBoard, onCargoIssueChange }: {
   className?: string;
   scenarioData?: CargoTelemetry | Record<string, unknown>;
   scenarioTitle?: string;
   patientOnBoard?: boolean;
+  /** Called when cargo telemetry indicates an issue (temp/seal/shock/battery); turns on cargo alert in App */
+  onCargoIssueChange?: (hasIssue: boolean) => void;
 }) {
   const cargo = scenarioData && typeof scenarioData === 'object' && 'temperature_c' in scenarioData
     ? (scenarioData as CargoTelemetry)
@@ -23,9 +25,17 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
   const [elapsed, setElapsed] = useState(cargo?.elapsed_time_s ?? 0);
 
   const hasCargo = Boolean(scenarioTitle && cargo);
+  const isEnRouteToPickup = scenarioTitle?.toUpperCase().includes('BLOOD') && !patientOnBoard;
   const tempOk = temp >= 2 && temp <= 8;
   const lidOk = cargo?.lid_closed ?? true;
   const battery = cargo?.battery_percent ?? 88;
+  const batteryOk = battery >= 50;
+  const shockOk = shock <= 2;
+  const hasCargoIssue = hasCargo && !isEnRouteToPickup && (!tempOk || !lidOk || !batteryOk || !shockOk);
+
+  useEffect(() => {
+    onCargoIssueChange?.(hasCargoIssue);
+  }, [hasCargoIssue, onCargoIssueChange]);
 
   useEffect(() => {
     if (cargo) {
@@ -43,16 +53,15 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
       setTemp(prev => Math.max(1.5, Math.min(8.5, prev + (Math.random() * 0.2 - 0.1))));
       setShock(prev => Math.random() < 0.02 ? prev + 0.2 : Math.max(0, prev - 0.01));
     }, 1000);
+
     return () => clearInterval(interval);
   }, [hasCargo]);
 
-  const isEnRouteToPickup = scenarioTitle?.toUpperCase().includes('BLOOD') && !patientOnBoard;
-
   return (
-    <div className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4 flex flex-col ${className}`}>
-      <div className="flex justify-between items-center border-b border-white/5 pb-2 mb-2">
+    <div className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden ${className}`}>
+      <div className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-white/5">
         <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase">
-          CARGO STATUS
+          Cargo Status
         </h2>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-gray-500 font-mono">{hasCargo ? 'LIVE' : 'NO SHIPMENT'}</span>
@@ -60,6 +69,7 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
         </div>
       </div>
 
+      <div className="p-4 flex flex-col flex-1 min-h-0 overflow-y-auto">
       {!scenarioTitle && (
         <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
           <div className="text-gray-600 text-3xl mb-3">📦</div>
@@ -120,6 +130,7 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }

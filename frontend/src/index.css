@@ -23,6 +23,10 @@
 /* RED ALERT OVERRIDES */
 body.red-alert {
   --tw-text-opacity: 1;
+  background: rgba(69, 10, 10, 0.35) !important;
+}
+body.red-alert #root > div {
+  background: rgba(69, 10, 10, 0.4) !important;
 }
 
 /* Force Cyan Text to turn Red */

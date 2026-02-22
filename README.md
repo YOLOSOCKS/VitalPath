@@ -264,12 +264,16 @@ python docs/bench/make_figures.py --bench-dir docs/bench --out docs/figures --th
 
 ## Setup & Run
 
+> **If you see `ECONNREFUSED 127.0.0.1:8000` in the Vite console:** the backend is not running. Start it first (step 1 below) in a separate terminal and leave it running.
+
 ### Prerequisites
 - **Python 3.10+** (3.11 recommended)
 - **Node.js 18+**
 - A C/C++ build toolchain may be required on Windows for some Python wheels
 
-### 1) Backend (FastAPI)
+### 1) Backend (FastAPI) — start this first
+The frontend proxies `/api/*` to `http://127.0.0.1:8000`. If the backend is not running, you’ll see **ECONNREFUSED** in the Vite console and a banner in the app.
+
 ```bash
 cd backend
 
@@ -277,13 +281,17 @@ python -m venv .venv
 # macOS/Linux:
 source .venv/bin/activate
 # Windows PowerShell:
-# .venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
 
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
+Leave this terminal running. You should see: `Uvicorn running on http://127.0.0.1:8000`.
+
 ### 2) Frontend (Vite)
+In a **second terminal**:
+
 ```bash
 cd frontend
 npm install

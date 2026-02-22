@@ -116,7 +116,7 @@ async def get_alerts(
 class OrganTransportRequest(BaseModel):
     donor_hospital: str
     recipient_hospital: str
-    organ_type: str  # heart, lung, liver, kidney, pancreas, etc.
+    organ_type: str = "liver"  # heart, lung, liver, kidney, pancreas, etc.
     current_time: Optional[datetime] = None
 
 
@@ -166,3 +166,7 @@ async def post_plan_organ_transport(req: OrganTransportRequest) -> dict:
         return _serialize_plan(plan)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

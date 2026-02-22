@@ -19,7 +19,11 @@ interface ChatRequest {
 }
 
 // 1. Wrap in forwardRef to allow App.tsx to 'hold' this component
-const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
+const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: controlledToggle }: { className?: string; isOpen?: boolean; onToggle?: () => void }, ref) => {
+  const [internalOpen, setInternalOpen] = useState(true);
+  const isControlled = controlledOpen !== undefined && controlledToggle !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const onToggle = isControlled ? controlledToggle : () => setInternalOpen((o) => !o);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
     { role: 'ai', text: 'VitalPath AI online. Monitoring temperature, shock, seal & battery. Ask about cargo viability or what to do next.', timestamp: 'NOW' }
@@ -133,26 +137,41 @@ const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
   };
 
   return (
-    <div className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden ${className}`}>
-      <div className="p-3 border-b border-white/10 bg-white/5 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={!open ? onToggle : undefined}
+      onKeyDown={(e) => { if (!open && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onToggle?.(); } }}
+      className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden transition-all duration-300 relative z-10 ${className} ${open ? 'min-h-0 max-h-[200px] shrink-0' : 'min-h-[56px] h-14 shrink-0 flex-grow-0 cursor-pointer hover:bg-white/5 select-none'}`}
+    >
+      <div
+        onClick={open ? (e) => { e.stopPropagation(); onToggle?.(); } : undefined}
+        className="h-14 min-h-[56px] shrink-0 px-4 py-3 border-b border-white/10 bg-white/5 flex items-center justify-between cursor-pointer hover:bg-white/5 w-full"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase truncate">
             CARGO GUARDIAN
           </h2>
-          <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-yellow-400 animate-ping' : 'bg-green-500'}`} />
+          <div className={`w-2 h-2 rounded-full shrink-0 ${isLoading ? 'bg-yellow-400 animate-ping' : 'bg-green-500'}`} />
         </div>
-        
-        <button 
-          onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
-          className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-colors ${
-            isVoiceEnabled ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' : 'bg-gray-800 border-gray-600 text-gray-500'
-          }`}
-        >
-          VOICE: {isVoiceEnabled ? 'ON' : 'OFF'}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {open && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setIsVoiceEnabled(!isVoiceEnabled); }}
+              className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-colors ${
+                isVoiceEnabled ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' : 'bg-gray-800 border-gray-600 text-gray-500'
+              }`}
+            >
+              VOICE: {isVoiceEnabled ? 'ON' : 'OFF'}
+            </button>
+          )}
+          <span className="text-gray-500 text-xs font-mono" aria-hidden>{open ? '▼' : '▲'}</span>
+        </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-xs scrollbar-thin scrollbar-thumb-cyan-900">
+      {open && (
+      <>
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 font-mono text-xs scrollbar-thin scrollbar-thumb-cyan-900">
         {messages.map((m, i) => (
           <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
             <div className={`max-w-[90%] p-2 rounded border ${
@@ -192,6 +211,8 @@ const AIAssistant = forwardRef(({ className }: { className?: string }, ref) => {
           {isLoading ? '...' : 'SEND'}
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 });
