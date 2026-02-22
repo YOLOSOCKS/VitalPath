@@ -1,5 +1,7 @@
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 from app.algorithm import router as algo_router
 from app.vitalpath import router as vitalpath_router
 from app.services.gemini import (
@@ -13,6 +15,9 @@ from app.services.gemini import (
 )
 from fastapi.responses import Response
 from app.services.voice import generate_voice_stream
+
+_backend_dir = Path(__file__).resolve().parent.parent
+load_dotenv(_backend_dir / ".env")
 
 app = FastAPI(
     title="VitalPath AI API",
@@ -87,3 +92,4 @@ async def cargo_integrity_endpoint(req: CargoIntegrityRequest):
 @app.post("/api/ai/risk-evaluate")
 async def risk_evaluate_endpoint(req: RiskEvaluateRequest):
     return await get_risk_evaluate_response(req)
+

@@ -214,6 +214,7 @@ export default function LiveMap({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const ambulanceMarker = useRef<maplibregl.Marker | null>(null);
+  const vehicleElRef = useRef<HTMLDivElement | null>(null);
   const destMarker = useRef<maplibregl.Marker | null>(null);
 
 
@@ -257,6 +258,44 @@ export default function LiveMap({
 
   // When dev panel opens (from nav or in-map), fetch algo stats once; when it closes, hide algo race
   const prevShowEtaPanelRef = useRef(false);
+  const buildVehicleSvg = (color: string, glow: string, mode: 'road' | 'air') => {
+    if (mode === 'air') {
+      return `
+        <span class="map-vehicle-pulse-ring" style="position:absolute;width:68px;height:68px;margin-left:0;margin-top:0;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;border:2px solid ${glow};opacity:0.45;animation:map-vehicle-pulse 1.1s ease-in-out infinite;pointer-events:none"></span>
+        <svg width="52" height="52" viewBox="0 0 512 512" style="filter: drop-shadow(0 0 20px ${glow}); position:relative; z-index:1">
+          <path d="M480 192H365.71L260.61 8.07C257.79 3.11 252.57 0 246.87 0h-33.75c-5.7 0-10.92 3.11-13.74 8.07L114.29 192H0v64l128 32v96l-32 32v32l96-32 96 32v-32l-32-32v-96l128-32v-64z" fill="${color}"/>
+        </svg>
+      `;
+    }
+    return `
+      <span class="map-vehicle-pulse-ring" style="position:absolute;width:56px;height:56px;margin-left:0;margin-top:0;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;border:2px solid ${color};opacity:0.35;animation:map-vehicle-pulse 2s ease-in-out infinite;pointer-events:none"></span>
+      <svg id="veh" width="40" height="40" viewBox="0 0 64 64" style="filter: drop-shadow(0 0 10px ${color}); position:relative; z-index:1">
+        <rect x="8" y="18" width="48" height="26" rx="6" fill="#1e293b" stroke="${color}" stroke-width="2"/>
+        <path d="M44 18 L56 18 Q58 18 58 20 L58 38 L44 38 Z" fill="#0f172a" stroke="${color}" stroke-width="1.5"/>
+        <path d="M46 22 L54 22 Q55 22 55 23 L55 32 L46 32 Z" fill="#38bdf8" opacity="0.5"/>
+        <rect x="20" y="29" width="12" height="3" rx="1" fill="${color}"/>
+        <rect x="24.5" y="25" width="3" height="11" rx="1" fill="${color}"/>
+        <rect x="24" y="13" width="8" height="6" rx="2" fill="${color}" opacity="0.9"/>
+        <rect x="24" y="13" width="8" height="6" rx="2" fill="${color}" opacity="0.5">
+          <animate attributeName="opacity" values="0.3;1;0.3" dur="0.8s" repeatCount="indefinite"/>
+        </rect>
+        <circle cx="18" cy="44" r="5" fill="#334155" stroke="${color}" stroke-width="1.5"/>
+        <circle cx="18" cy="44" r="2" fill="${color}"/>
+        <circle cx="46" cy="44" r="5" fill="#334155" stroke="${color}" stroke-width="1.5"/>
+        <circle cx="46" cy="44" r="2" fill="${color}"/>
+      </svg>
+    `;
+  };
+
+  const setVehicleMarkerMode = (mode: 'road' | 'air') => {
+    if (!vehicleElRef.current) return;
+    const color = mode === 'air' ? '#7c3aed' : theme.colors.primaryRedGlow;
+    const glow = mode === 'air' ? '#c084fc' : theme.colors.primaryRedGlow;
+    vehicleElRef.current.style.width = mode === 'air' ? '48px' : '40px';
+    vehicleElRef.current.style.height = mode === 'air' ? '48px' : '40px';
+    vehicleElRef.current.innerHTML = buildVehicleSvg(color, glow, mode);
+  };
+
   useEffect(() => {
     if (showEtaPanel && !prevShowEtaPanelRef.current) fetchBothAlgoStats();
     if (!showEtaPanel) setShowAlgoRace(false);
@@ -296,11 +335,14 @@ export default function LiveMap({
   };
 
   // Autocomplete
-  type Suggestion = { lat: number; lng: number; display_name: string };
+  type Suggestion = { lat: number; lng: number; display_name: string; place_id?: string };
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [outOfStateMode, setOutOfStateMode] = useState(false);
+  const [outOfStateMiles, setOutOfStateMiles] = useState<{ total: number; remaining: number } | null>(null);
+  const vehicleModeRef = useRef<'road' | 'air'>('road');
 
   // Animation refs
   const animRef = useRef<number | null>(null);
@@ -357,25 +399,10 @@ export default function LiveMap({
     el.className = 'ambulance-marker';
     el.style.cssText = 'position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;will-change:transform';
     const red = theme.colors.primaryRedGlow;
-    el.innerHTML = `
-      <span class="map-vehicle-pulse-ring" style="position:absolute;width:56px;height:56px;margin-left:0;margin-top:0;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;border:2px solid ${red};opacity:0.35;animation:map-vehicle-pulse 2s ease-in-out infinite;pointer-events:none"></span>
-      <svg id="veh" width="40" height="40" viewBox="0 0 64 64" style="filter: drop-shadow(0 0 10px ${red}); position:relative; z-index:1">
-        <rect x="8" y="18" width="48" height="26" rx="6" fill="#1e293b" stroke="${red}" stroke-width="2"/>
-        <path d="M44 18 L56 18 Q58 18 58 20 L58 38 L44 38 Z" fill="#0f172a" stroke="${red}" stroke-width="1.5"/>
-        <path d="M46 22 L54 22 Q55 22 55 23 L55 32 L46 32 Z" fill="#38bdf8" opacity="0.5"/>
-        <rect x="20" y="29" width="12" height="3" rx="1" fill="${red}"/>
-        <rect x="24.5" y="25" width="3" height="11" rx="1" fill="${red}"/>
-        <rect x="24" y="13" width="8" height="6" rx="2" fill="${red}" opacity="0.9"/>
-        <rect x="24" y="13" width="8" height="6" rx="2" fill="${red}" opacity="0.5">
-          <animate attributeName="opacity" values="0.3;1;0.3" dur="0.8s" repeatCount="indefinite"/>
-        </rect>
-        <circle cx="18" cy="44" r="5" fill="#334155" stroke="${red}" stroke-width="1.5"/>
-        <circle cx="18" cy="44" r="2" fill="${red}"/>
-        <circle cx="46" cy="44" r="5" fill="#334155" stroke="${red}" stroke-width="1.5"/>
-        <circle cx="46" cy="44" r="2" fill="${red}"/>
-      </svg>
-    `;
+    el.innerHTML = buildVehicleSvg(red, red, 'road');
+    vehicleElRef.current = el;
     ambulanceMarker.current = new maplibregl.Marker({ element: el }).setLngLat([DEFAULT_CENTER.lng, DEFAULT_CENTER.lat]).addTo(map.current);
+
 
     map.current.on('load', () => {
       map.current?.addSource('vitalpath-route', {        type: 'geojson',
@@ -547,6 +574,10 @@ export default function LiveMap({
         // Move camera to start position and re-enable following
         map.current?.jumpTo({ center: [startLng, startLat], zoom: 16, pitch: 70 });
         setIsFollowing(true);
+        vehicleModeRef.current = 'road';
+        setVehicleMarkerMode('road');
+        setOutOfStateMode(false);
+        setOutOfStateMiles(null);
         smoothBearingRef.current = null;
       }
       fetchRoute(end, true);  // auto-start without pre-set closures
@@ -634,6 +665,13 @@ export default function LiveMap({
         steps,
         algorithm: res.data.algorithm,
       };
+      if (vehicleModeRef.current === 'air') {
+        const totalMiles = totalDist / 1609.34;
+        setOutOfStateMiles({
+          total: Number.isFinite(totalMiles) ? totalMiles : 0,
+          remaining: Number.isFinite(totalMiles) ? totalMiles : 0,
+        });
+      }
 
       // Place a red pin at the destination
       if (map.current) {
@@ -1114,30 +1152,39 @@ export default function LiveMap({
     });
   };
 
-  const handleGeocode = async () => {
-    if (!destQuery.trim()) return;
+  const handleGeocode = async (queryOverride?: string, autoStart = false) => {
+    const query = queryOverride ?? destQuery;
+    if (!query.trim()) return;
     try {
       setIsRouting(true);
       setRouteError(null);
 
-      // Use autocomplete endpoint (DMV area scoped) and take the first result
-      const res = await api.get('/api/algo/autocomplete', { params: { q: destQuery.trim() } });
+      // Use autocomplete endpoint and take the first result
+      const res = await api.get('/api/algo/autocomplete', { params: { q: query.trim() } });
       const results = res.data?.results || [];
       if (!results.length) {
-        setRouteError('No addresses found in the DMV area. Try a more specific query.');        setIsRouting(false);
+        setRouteError('No addresses found. Try a more specific query.');
+        setIsRouting(false);
         return;
       }
       const top = results[0];
       setDestQuery(top.display_name);
       const end = { lat: top.lat, lng: top.lng };
       setEndPoint(end);
-      await fetchRoute(end);  // loads route, enables GO
+      if (outOfStateMode) {
+        vehicleModeRef.current = 'air';
+        setIsFollowing(true);
+        await fetchRoute(end, true); // auto-start for worldwide air request
+      } else {
+        await fetchRoute(end, autoStart); // loads route, enables GO
+      }
     } catch (e: any) {
       console.error('Geocode failed', e);
       setRouteError(
         e?.response?.data?.detail ||
         e?.message ||
-        'Geocode failed. Try a more specific address in the DMV area.'      );
+        'Geocode failed. Try a more specific address.'
+      );
       setIsRouting(false);
     }
   };
@@ -1171,8 +1218,8 @@ export default function LiveMap({
   const onInputChange = (value: string) => {
     setDestQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    // 1100ms debounce — Nominatim enforces max 1 request/second
-    debounceRef.current = setTimeout(() => fetchSuggestions(value), 1100);
+    // Google Places can handle faster lookups
+    debounceRef.current = setTimeout(() => fetchSuggestions(value), 350);
   };
 
   const handleSelectSuggestion = async (s: Suggestion) => {
@@ -1181,8 +1228,31 @@ export default function LiveMap({
     setShowSuggestions(false);
     const end = { lat: s.lat, lng: s.lng };
     setEndPoint(end);
-    await fetchRoute(end);  // loads route, enables GO — does NOT start animation
+    if (outOfStateMode) {
+      vehicleModeRef.current = 'air';
+      setIsFollowing(true);
+      await fetchRoute(end, true); // auto-start for worldwide air request
+    } else {
+      await fetchRoute(end); // loads route, enables GO — does NOT start animation
+    }
   };
+
+  useEffect(() => {
+    const onAiDispatch = (event: Event) => {
+      const detail = (event as CustomEvent).detail || {};
+      const location = detail.location as string | undefined;
+      if (!location) return;
+      cancelRoute();
+      setOutOfStateMode(false);
+      setOutOfStateMiles(null);
+      vehicleModeRef.current = 'road';
+      setIsFollowing(true);
+      setDestQuery(location);
+      handleGeocode(location, true);
+    };
+    window.addEventListener('vitalpath:ai-dispatch', onAiDispatch as EventListener);
+    return () => window.removeEventListener('vitalpath:ai-dispatch', onAiDispatch as EventListener);
+  }, []);
 
   // Realistic GPS-like animation: drive the marker using backend's cum_time_s (and a speedup factor for demo).
   useEffect(() => {
@@ -1209,10 +1279,13 @@ export default function LiveMap({
       if (!m || !ambulanceMarker.current || !map.current) return;
 
       const elapsedS = (performance.now() - startTimeRef.current) / 1000;
-      const simTimeS = elapsedS * SIM_SPEEDUP;
       const totalTime = m.totalTime || m.cumTime[m.cumTime.length - 1];
+      const speed = vehicleModeRef.current === 'air'
+        ? (totalTime > 0 ? Math.max(1, totalTime / 12) : SIM_SPEEDUP)
+        : SIM_SPEEDUP;
+      const simTimeS = elapsedS * speed;
 
-      if (simTimeS >= totalTime) {
+        if (simTimeS >= totalTime) {
         const end = m.coords[m.coords.length - 1];
         ambulanceMarker.current.setLngLat(end);
         setCurrentPos(end);
@@ -1228,7 +1301,7 @@ export default function LiveMap({
           { totalDist: m.totalDist, totalTime, steps: m.steps, algorithm: m.algorithm },
           m.totalDist,
           totalTime,
-          SIM_SPEEDUP
+          speed
         );
         onNavUpdateRef.current?.(finalNav);
 
@@ -1294,7 +1367,7 @@ export default function LiveMap({
           } else {
             // Freeze the sim clock at this point so it resumes correctly after reroute
             const stopTime = m.cumTime[stopI] || 0;
-            startTimeRef.current = performance.now() - (stopTime / SIM_SPEEDUP) * 1000;
+            startTimeRef.current = performance.now() - (stopTime / speed) * 1000;
           }
           animRef.current = requestAnimationFrame(tick);
           return;
@@ -1327,9 +1400,17 @@ export default function LiveMap({
         { totalDist: m.totalDist, totalTime, steps: m.steps, algorithm: m.algorithm },
         traveledM,
         simTimeS,
-        SIM_SPEEDUP
+        speed
       );
       onNavUpdateRef.current?.(nav);
+      if (vehicleModeRef.current === 'air') {
+        const totalMiles = (nav.total_distance_m || 0) / 1609.34;
+        const remainingMiles = nav.remaining_distance_m / 1609.34;
+        setOutOfStateMiles({
+          total: Number.isFinite(totalMiles) ? totalMiles : 0,
+          remaining: Number.isFinite(remainingMiles) ? remainingMiles : 0,
+        });
+      }
 
       const rawBrg = bearingDeg(a, b);
 
@@ -1360,7 +1441,15 @@ export default function LiveMap({
         targetZoom = BASE_ZOOM + (TURN_ZOOM - BASE_ZOOM) * factor;
       }
 
-      if (followRef.current) {
+      if (vehicleModeRef.current === 'air') {
+        // Keep the plane centered at all times, even at high speed.
+        map.current.jumpTo({
+          center: pos as any,
+          zoom: 5.5,
+          bearing: 0,
+          pitch: 0,
+        });
+      } else if (followRef.current) {
         map.current.easeTo({
           center: pos,
           bearing: brg,
@@ -1447,7 +1536,8 @@ export default function LiveMap({
 
             {/* Tactical Injections */}
             <div>
-              <div className="text-[10px] text-red-500/60 font-mono font-bold uppercase tracking-wider mb-2">Tactical Injections</div>              <div className="flex flex-col gap-1.5">
+              <div className="text-[10px] text-red-500/60 font-mono font-bold uppercase tracking-wider mb-2">Tactical Injections</div>
+              <div className="flex flex-col gap-1.5">
                 {Object.entries(SCENARIOS).map(([key, data]) => {
                   const isOrganTransport = key === 'ORGAN_TRANSPORT';
                   const btnClass = isOrganTransport
@@ -1467,6 +1557,71 @@ export default function LiveMap({
                     </button>
                   );
                 })}
+                <button
+                  onClick={() => {
+                    setOutOfStateMode(true);
+                    setIsFollowing(true);
+                    vehicleModeRef.current = 'air';
+                    setVehicleMarkerMode('air');
+                    smoothBearingRef.current = null;
+                    setOutOfStateMiles(null);
+                    onScenarioClear?.();
+                    cancelRoute();
+                  }}
+                  className="w-full text-left px-3 py-2 text-[10px] font-mono font-bold rounded-lg border transition-all duration-300 hover:scale-[1.02] active:scale-95 border-purple-500/50 text-purple-300 bg-purple-500/10 hover:bg-purple-500 hover:text-white shadow-[0_0_15px_rgba(168,85,247,0.25)]"
+                >
+                  OUT OF STATE REQUEST
+                </button>
+                {outOfStateMode && (
+                  <div className="mt-1 rounded-lg border border-purple-500/30 bg-purple-950/20 p-2">
+                    <div className="text-[9px] text-purple-300 font-mono uppercase tracking-wider mb-1">Worldwide Destination</div>
+                    <div className="mb-2 inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-purple-500/40 bg-purple-500/10 text-purple-200">
+                      ✈ AIR ROUTE ACTIVE
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={destQuery}
+                        onChange={(e) => onInputChange(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleGeocode(); }}
+                        placeholder="Enter any address worldwide..."
+                        className="flex-1 bg-transparent border border-purple-500/30 rounded px-2 py-1 text-[10px] font-mono text-purple-100 placeholder-purple-400/40 focus:outline-none focus:ring-1 focus:ring-purple-400/60"
+                      />
+                      <button
+                        onClick={() => {
+                          vehicleModeRef.current = 'air';
+                          handleGeocode();
+                        }}
+                        disabled={isRouting}
+                        className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded border transition-all ${
+                          isRouting
+                            ? 'border-purple-500/20 text-purple-400/40 bg-purple-500/10'
+                            : 'border-purple-500/60 text-purple-200 bg-purple-500/20 hover:bg-purple-500 hover:text-white'
+                        }`}
+                      >
+                        REQUEST
+                      </button>
+                    </div>
+                    {showSuggestions && suggestions.length > 0 && (
+                      <div className="mt-2 max-h-32 overflow-y-auto border border-purple-500/20 rounded bg-black/50">
+                        {suggestions.map((s, idx) => (
+                          <button
+                            key={`${s.display_name}-${idx}`}
+                            onClick={() => handleSelectSuggestion(s)}
+                            className="w-full text-left px-2 py-1 text-[10px] text-purple-100 hover:bg-purple-500/20"
+                          >
+                            {s.display_name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {outOfStateMiles && (
+                      <div className="mt-2 text-[9px] font-mono text-purple-200/80">
+                        <div>Total: {outOfStateMiles.total.toFixed(1)} mi</div>
+                        <div>Remaining: {outOfStateMiles.remaining.toFixed(1)} mi</div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
