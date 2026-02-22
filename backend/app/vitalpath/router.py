@@ -1,7 +1,8 @@
 """
-VitalPath API: telemetry simulation, risk evaluation, mission logging, scenario-driven alerts.
+VitalPath API: telemetry simulation, risk evaluation, mission logging, scenario-driven alerts, organ transport planning.
 """
-from typing import Optional, List
+from datetime import datetime
+from typing import Optional, List, Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -9,6 +10,7 @@ from app.services.telemetry import simulate_telemetry, TelemetryReading
 from app.services.risk import evaluate_risk, RiskEvaluation
 from app.services.mission_log import append_log, get_log, get_mission_ids, MissionLogRequest
 from app.services.alerts import evaluate_alerts, Alert
+from app.services.organ_transport import plan_organ_transport, OrganTransportPlan
 
 router = APIRouter()
 
@@ -108,3 +110,59 @@ async def get_alerts(
         max_safe_elapsed_s=max_safe_elapsed_s,
     )
     return AlertsResponse(alerts=alerts)
+
+
+# --- Organ transport planning ---
+class OrganTransportRequest(BaseModel):
+    donor_hospital: str
+    recipient_hospital: str
+    organ_type: str  # heart, lung, liver, kidney, pancreas, etc.
+    current_time: Optional[datetime] = None
+
+
+def _serialize_plan(plan: OrganTransportPlan) -> dict:
+    """Convert OrganTransportPlan to JSON-serializable dict."""
+    segments = []
+    for s in plan.route.segments:
+        segments.append({
+            "segment_type": s.segment_type,
+            "coordinates": list(s.coordinates),
+            "distance_m": s.distance_m,
+            "duration_s": s.duration_s,
+            "narrative": s.narrative,
+        })
+    return {
+        "route": {
+            "segments": segments,
+            "total_distance_m": plan.route.total_distance_m,
+            "total_duration_s": plan.route.total_duration_s,
+            "path_coordinates": plan.route.path_coordinates,
+        },
+        "transport_mode": plan.transport_mode,
+        "risk_status": plan.risk_status,
+        "recommendation": plan.recommendation,
+        "donor_coords": {"lat": plan.donor_coords.lat, "lng": plan.donor_coords.lng},
+        "recipient_coords": {"lat": plan.recipient_coords.lat, "lng": plan.recipient_coords.lng},
+        "max_safe_time_s": plan.max_safe_time_s,
+        "eta_total_s": plan.eta_total_s,
+        "alerts": plan.alerts,
+        "ai_risk_input": plan.ai_risk_input,
+    }
+
+
+@router.post("/plan/organ-transport")
+async def post_plan_organ_transport(req: OrganTransportRequest) -> dict:
+    """
+    Plan organ transport: destination, transport mode (road/air/hybrid), route, ETA,
+    and AI risk input. Alerts are included if ETA exceeds organ-specific safe time.
+    """
+    try:
+        plan = plan_organ_transport(
+            donor_hospital=req.donor_hospital,
+            recipient_hospital=req.recipient_hospital,
+            organ_type=req.organ_type,
+            current_time=req.current_time,
+        )
+        return _serialize_plan(plan)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
