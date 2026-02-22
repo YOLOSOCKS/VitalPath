@@ -34,9 +34,8 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
   const scrollRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // 2. EXPOSE THE INJECTION COMMAND
+  // 2. EXPOSE injectSystemMessage AND speak (for scenario TTS)
   useImperativeHandle(ref, () => ({
-    // Added 'shouldSpeak' parameter with a default of true
     injectSystemMessage: async (text: string, shouldSpeak = true) => {
       const aiMsg: Message = {
         role: 'ai',
@@ -44,14 +43,11 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
         timestamp: new Date().toLocaleTimeString([], { hour12: false })
       };
       setMessages(prev => [...prev, aiMsg]);
-      
-      // Only call ElevenLabs if we aren't using a local pre-recorded file
       if (isVoiceEnabled && shouldSpeak) {
         await handleVoicePlay(text);
-      } else {
-        console.log("VitalPath AI LOG: Scenario local audio active. ElevenLabs API bypassed.");
       }
-    }
+    },
+    speak: async (text: string) => handleVoicePlay(text),
   }));
 
   // Auto-scroll to bottom
@@ -64,32 +60,51 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
   // Clean up audio URLs to prevent memory leaks
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
+      if (audioRef.current?.src?.startsWith('blob:')) {
         audioRef.current.pause();
         URL.revokeObjectURL(audioRef.current.src);
       }
     };
   }, []);
 
-  const handleVoicePlay = async (text: string) => {
+  const handleVoicePlay = async (text: string): Promise<void> => {
     if (!isVoiceEnabled) return;
 
     try {
       if (audioRef.current) {
         audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
+        if (audioRef.current.src?.startsWith('blob:')) {
+          URL.revokeObjectURL(audioRef.current.src);
+        }
       }
 
+      console.log("[TTS] Calling ElevenLabs API:", text.slice(0, 60) + (text.length > 60 ? "…" : ""));
       const res = await api.post('/api/ai/speak',
         { message: text, context: 'general' } as ChatRequest,
         { responseType: 'blob' }
       );
-      
+
+      if (!res.data || (res.data as Blob).size === 0) {
+        throw new Error("Empty audio response");
+      }
+
       const audioUrl = URL.createObjectURL(res.data);
       audioRef.current = new Audio(audioUrl);
-      audioRef.current.play();
+      audioRef.current.playbackRate = 1.5;
+      await audioRef.current.play();
     } catch (err) {
       console.error("ElevenLabs Integration Error:", err);
+      // Fallback to browser speechSynthesis only when ElevenLabs fails
+      try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.5;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+        console.log("[TTS] Fallback: using speechSynthesis");
+      } catch (fallbackErr) {
+        console.error("speechSynthesis fallback failed:", fallbackErr);
+        throw fallbackErr;
+      }
     }
   };
 

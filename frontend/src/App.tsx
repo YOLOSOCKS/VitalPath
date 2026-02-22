@@ -133,6 +133,16 @@ function App() {
       .then(() => setAudioError(false))
       .catch(() => setAudioError(true));
 
+    // 1. SPEAK via ElevenLabs TTS (dynamic, no static mp3)
+    const phrase = scenario.spokenPhrase ?? scenario.aiPrompt;
+    if (aiRef.current?.speak) {
+      aiRef.current.speak(phrase).catch((e: any) => {
+        console.error('Voice playback failed:', e);
+        setAudioError(true);
+      });
+    }
+
+    // 2. INJECT MESSAGE INTO AI BRAIN (chat display only, no duplicate speech)
     if (aiRef.current) {
       aiRef.current.injectSystemMessage(scenario.aiPrompt, false);
     }

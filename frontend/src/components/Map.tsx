@@ -140,10 +140,15 @@ const HOWARD_UNIV_HOSPITAL = { lat: 38.9185, lng: -77.0195 };
 const GEORGETOWN_UNIV_HOSPITAL = { lat: 38.9114, lng: -77.0726 };
 const UNION_MARKET = { lat: 38.9086, lng: -76.9873 };
 
-// Donor/recipient/organ for plan API (auto-destination, no address input)
+// Organ transport TTS phrases (ElevenLabs)
+const ORGAN_TRANSPORT_PHRASE = "Unit 22, organ transport protocol initiated. Priority routing to transplant center. Maintain temperature integrity and sterile containment.";
+const BLOOD_RUN_PHRASE = "Blood run confirmed. Standard medical logistics route active. Estimated arrival on schedule.";
+const CARGO_ALERT_PHRASE = "Cargo alert. Vital organ integrity compromised. AI assistant rerouting. Priority escalation in progress.";
+
 const SCENARIOS: Record<string, any> = {
   ORGAN_TRANSPORT: {
     title: 'ORGAN TRANSPORT // COLD-CHAIN ACTIVE',
+    spokenPhrase: ORGAN_TRANSPORT_PHRASE,
     isRedAlert: false,
     start: DEFAULT_CENTER,
     end: HOWARD_UNIV_HOSPITAL,
@@ -157,6 +162,7 @@ const SCENARIOS: Record<string, any> = {
   },
   BLOOD_RUN: {
     title: 'BLOOD PRODUCTS // ROUTINE',
+    spokenPhrase: BLOOD_RUN_PHRASE,
     isRedAlert: false,
     start: DEFAULT_CENTER,
     waypoints: [UNION_MARKET],
@@ -171,6 +177,7 @@ const SCENARIOS: Record<string, any> = {
   },
   CARGO_ALERT: {
     title: 'CARGO ALERT // SEAL / TEMP RISK',
+    spokenPhrase: CARGO_ALERT_PHRASE,
     isRedAlert: true,
     start: DEFAULT_CENTER,
     end: HOWARD_UNIV_HOSPITAL,
