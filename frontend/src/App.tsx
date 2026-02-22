@@ -124,33 +124,17 @@ function App() {
       setOrganPlan(null);
     }
 
-    // 1. Alert tone (mp3) — wait for it to finish before TTS and AI message
-    const fileName = scenario.isRedAlert ? 'trauma.mp3' : 'routine.mp3';
-    const audioPath = `/audio/${fileName}`;
-    const alertAudio = new Audio(audioPath);
-    alertAudio.volume = 1.0;
-    const mp3Finished = new Promise<void>((resolve, reject) => {
-      alertAudio.addEventListener('ended', () => resolve());
-      alertAudio.addEventListener('error', (e) => reject(e));
-    });
-    alertAudio.play().then(() => setAudioError(false)).catch(() => setAudioError(true));
-
+    // All speech via dynamic ElevenLabs TTS (no static mp3)
     const phrase = scenario.spokenPhrase ?? scenario.aiPrompt;
-    const doTtsAndInject = () => {
-      if (aiRef.current?.speak) {
-        aiRef.current.speak(phrase).catch((e: any) => {
-          console.error('Voice playback failed:', e);
-          setAudioError(true);
-        });
-      }
-      if (aiRef.current) {
-        aiRef.current.injectSystemMessage(scenario.aiPrompt, false);
-      }
-    };
-
-    mp3Finished
-      .then(() => doTtsAndInject())
-      .catch(() => doTtsAndInject());
+    if (aiRef.current?.speak) {
+      aiRef.current.speak(phrase).catch((e: any) => {
+        console.error('Voice playback failed:', e);
+        setAudioError(true);
+      });
+    }
+    if (aiRef.current) {
+      aiRef.current.injectSystemMessage(scenario.aiPrompt, false);
+    }
   };
 
   const handleScenarioClear = () => {

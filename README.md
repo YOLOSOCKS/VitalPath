@@ -18,7 +18,7 @@
 ### Links:
 **[Youtube Demonstration & Showcase Video](https://www.youtube.com/watch?v=_uR9GesJHUE)**
 
-**[Devpost Project Link](https://devpost.com/software/aegis-c5rwk3)**
+**[Devpost Project Link](https://devpost.com/software/vitalpath-ai)**
 
 ---
 
@@ -329,21 +329,21 @@ npm install
 Enable BM-SSSP as the default backend algorithm:
 ```bash
 cd backend
-AEGIS_ROUTE_ALGO=bmsssp uvicorn app.main:app --reload --port 8000
+VITALPATH_AI_ROUTE_ALGO=bmsssp uvicorn app.main:app --reload --port 8000
 ```
 
 Notes:
 - Frontend can also request the algorithm per-route via `algorithm: "dijkstra" | "bmsssp"`
 - BM-SSSP defaults to using the persistent runner (`server.mjs`). You can disable it:
   ```bash
-  BMSSSP_USE_SERVER=0 AEGIS_ROUTE_ALGO=bmsssp uvicorn app.main:app --reload --port 8000
+  BMSSSP_USE_SERVER=0 VITALPATH_AI_ROUTE_ALGO=bmsssp uvicorn app.main:app --reload --port 8000
   ```
 
 ### AlgoRace payload caps
 ```bash
-AEGIS_MAX_EXPLORATION_SEGS=2500
-AEGIS_MAX_NETWORK_SEGS=2200
-AEGIS_COORD_ROUND_DIGITS=6
+VITALPATH_AI_MAX_EXPLORATION_SEGS=2500
+VITALPATH_AI_MAX_NETWORK_SEGS=2200
+VITALPATH_AI_COORD_ROUND_DIGITS=6
 ```
 
 ---
@@ -444,7 +444,7 @@ AlgoRace is shown when:
 ---
 
 ## Data attribution & licensing
-VitalPath AI uses **OpenStreetMap** data via OSMnx / Overpass and geocoding via Nominatim.  
+VitalPath AI uses **OpenStreetMap** data via OSMnx / Overpass and geocoding via Nominatim.
 OpenStreetMap data is licensed under **ODbL** — see https://www.openstreetmap.org/copyright.
 
 ---

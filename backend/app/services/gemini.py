@@ -29,6 +29,7 @@ if _env_path_used is None:
 # Support both variable names; strip quotes, whitespace, and BOM (Windows)
 _raw = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
 API_KEY = _raw.strip().strip('"').strip("'").replace("\ufeff", "").strip() or None
+
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Initialize the modern client
@@ -54,7 +55,7 @@ class ChatRequest(BaseModel):
 
 async def get_ai_response(request: ChatRequest):
     if not client:
-        return {"response": "Cargo Guardian needs a Gemini API key.)."}
+        return {"response": "Cargo Guardian needs a Gemini API key."}
 
     try:
         response = client.models.generate_content(

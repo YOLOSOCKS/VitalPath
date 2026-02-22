@@ -160,7 +160,7 @@ export default function AlgoRaceMiniMap({
 
     m.on('load', () => {
       // Background network (faint)
-      m.addSource('aegis-network', {
+      m.addSource('vitalpath-ai-network', {
         type: 'geojson',
         data: {
           type: 'Feature',
@@ -169,9 +169,9 @@ export default function AlgoRaceMiniMap({
         },
       });
       m.addLayer({
-        id: 'aegis-network-lines',
+        id: 'vitalpath-ai-network-lines',
         type: 'line',
-        source: 'aegis-network',
+        source: 'vitalpath-ai-network',
         paint: {
           'line-color': 'rgba(220, 220, 220, 0.18)',
           'line-width': 1,
@@ -334,7 +334,7 @@ export default function AlgoRaceMiniMap({
 
     // Update faint network
     const net = (data.networkEdges || []) as any;
-    const netSource = m.getSource('aegis-network') as maplibregl.GeoJSONSource | undefined;
+    const netSource = m.getSource('vitalpath-ai-network') as maplibregl.GeoJSONSource | undefined;
     if (netSource) {
       netSource.setData({
         type: 'Feature',

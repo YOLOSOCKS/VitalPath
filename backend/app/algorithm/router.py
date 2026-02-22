@@ -22,7 +22,7 @@ ox.settings.use_cache = True
 ox.settings.cache_folder = os.path.join(os.path.dirname(__file__), "..", "..", "..", ".osmnx_cache")
 ox.settings.log_console = False
 
-AEGIS_ROUTE_ALGO = os.environ.get("AEGIS_ROUTE_ALGO", "dijkstra").lower()
+VITALPATH_AI_ROUTE_ALGO = os.environ.get("VITALPATH_AI_ROUTE_ALGO", "dijkstra").lower()
 
 # Howard University Hospital — fixed destination for cardiac arrest scenarios (DMV)
 MSH_LAT = 38.9185
@@ -30,9 +30,9 @@ MSH_LNG = -77.0195
 _MSH_MATCH_THRESHOLD_DEG = 0.002  # ~200 m tolerance for coordinate matching
 
 # Payload / visualization caps (keeps AlgoRace responsive)
-AEGIS_MAX_EXPLORATION_SEGS = int(os.environ.get("AEGIS_MAX_EXPLORATION_SEGS", "2500"))
-AEGIS_MAX_NETWORK_SEGS = int(os.environ.get("AEGIS_MAX_NETWORK_SEGS", "2200"))
-AEGIS_COORD_ROUND_DIGITS = int(os.environ.get("AEGIS_COORD_ROUND_DIGITS", "6"))
+VITALPATH_AI_MAX_EXPLORATION_SEGS = int(os.environ.get("VITALPATH_AI_MAX_EXPLORATION_SEGS", "2500"))
+VITALPATH_AI_MAX_NETWORK_SEGS = int(os.environ.get("VITALPATH_AI_MAX_NETWORK_SEGS", "2200"))
+VITALPATH_AI_COORD_ROUND_DIGITS = int(os.environ.get("VITALPATH_AI_COORD_ROUND_DIGITS", "6"))
 
 
 # -------------------------------
@@ -155,7 +155,7 @@ def _angle_diff_deg(a2: float, a1: float) -> float:
     return d
 
 
-def _round_segments(segs: Optional[List[List[List[float]]]], digits: int = AEGIS_COORD_ROUND_DIGITS) -> Optional[List[List[List[float]]]]:
+def _round_segments(segs: Optional[List[List[List[float]]]], digits: int = VITALPATH_AI_COORD_ROUND_DIGITS) -> Optional[List[List[List[float]]]]:
     if segs is None:
         return None
     out: List[List[List[float]]] = []
@@ -183,7 +183,7 @@ def _downsample_segments(segs: Optional[List[List[List[float]]]], max_n: int) ->
         t += step
     return out
 
-def _sample_graph_edge_segments(G: nx.MultiDiGraph, max_n: int = AEGIS_MAX_NETWORK_SEGS) -> List[List[List[float]]]:
+def _sample_graph_edge_segments(G: nx.MultiDiGraph, max_n: int = VITALPATH_AI_MAX_NETWORK_SEGS) -> List[List[List[float]]]:
     """Reservoir-sample edge segments so we can draw a faint street network in the minimap without huge payloads."""
     sample: List[List[List[float]]] = []
     seen = 0
@@ -851,7 +851,7 @@ def _build_steps(edges_meta: List[Dict[str, Any]], cum_dist: List[float]) -> Lis
 
 # --- Nominatim helpers (async, no locks needed) ---
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-_NOMINATIM_HEADERS = {"User-Agent": "aegis-paradash/1.0"}
+_NOMINATIM_HEADERS = {"User-Agent": "vitalpath-ai/1.0"}
 _NOMINATIM_MIN_INTERVAL = 1.1  # seconds between calls
 _nominatim_last_call: float = 0.0
 
@@ -1043,7 +1043,7 @@ async def calculate_route(req: RouteRequest):
         dest_node = ox.nearest_nodes(G, X=req.end.lng, Y=req.end.lat)
 
         # 3) Shortest path (algorithm chosen by frontend)
-        chosen_algo = (req.algorithm or AEGIS_ROUTE_ALGO).lower()
+        chosen_algo = (req.algorithm or VITALPATH_AI_ROUTE_ALGO).lower()
         explored_coords = None
         explored_count: Optional[int] = None
         network_edges_coords: Optional[List[List[List[float]]]] = None
@@ -1051,7 +1051,7 @@ async def calculate_route(req: RouteRequest):
         # If the frontend is in algo-race mode, send a faint background network so the minimap
         # reads as 'streets' even before exploration lines accumulate.
         if req.include_exploration:
-            network_edges_coords = _round_segments(_sample_graph_edge_segments(G, max_n=AEGIS_MAX_NETWORK_SEGS), digits=AEGIS_COORD_ROUND_DIGITS)
+            network_edges_coords = _round_segments(_sample_graph_edge_segments(G, max_n=VITALPATH_AI_MAX_NETWORK_SEGS), digits=VITALPATH_AI_COORD_ROUND_DIGITS)
 
         t_algo0 = time.time()
 
@@ -1096,8 +1096,8 @@ async def calculate_route(req: RouteRequest):
         # Cap exploration payload size (and keep an accurate count for stats).
         if explored_coords is not None:
             explored_count = len(explored_coords)
-            explored_coords = _downsample_segments(explored_coords, AEGIS_MAX_EXPLORATION_SEGS)
-            explored_coords = _round_segments(explored_coords, digits=AEGIS_COORD_ROUND_DIGITS)
+            explored_coords = _downsample_segments(explored_coords, VITALPATH_AI_MAX_EXPLORATION_SEGS)
+            explored_coords = _round_segments(explored_coords, digits=VITALPATH_AI_COORD_ROUND_DIGITS)
 
         algo_ms = (t_algo1 - t_algo0) * 1000.0
         total_ms = (time.time() - t_total0) * 1000.0

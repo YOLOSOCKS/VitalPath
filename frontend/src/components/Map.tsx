@@ -139,7 +139,6 @@ const DEFAULT_CENTER = { lat: 38.9072, lng: -77.0369 };
 const HOWARD_UNIV_HOSPITAL = { lat: 38.9185, lng: -77.0195 };
 const GEORGETOWN_UNIV_HOSPITAL = { lat: 38.9114, lng: -77.0726 };
 const UNION_MARKET = { lat: 38.9086, lng: -76.9873 };
-
 // Organ transport TTS phrases (ElevenLabs)
 const ORGAN_TRANSPORT_PHRASE = "Unit 22, organ transport protocol initiated. Priority routing to transplant center. Maintain temperature integrity and sterile containment.";
 const BLOOD_RUN_PHRASE = "Blood run confirmed. Standard medical logistics route active. Estimated arrival on schedule.";
@@ -171,7 +170,7 @@ const SCENARIOS: Record<string, any> = {
     donor_hospital: 'union market',
     recipient_hospital: 'georgetown university hospital',
     organ_type: 'default',
-    aiPrompt: 'Blood products transport. Temperature and seal within spec. No shock events. Proceed to destination; verify handoff protocol on arrival.',
+    aiPrompt: 'Routine blood run. Standard medical logistics. Maintain cold chain.',
     cargoTelemetry: { temperature_c: 3.8, shock_g: 0.3, lid_closed: true, battery_percent: 88, elapsed_time_s: 0 },
     patientOnBoard: false,
   },
@@ -213,7 +212,6 @@ export default function LiveMap({
   const destMarker = useRef<maplibregl.Marker | null>(null);
 
 
-
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([]);
   const [currentPos, setCurrentPos] = useState<[number, number] | null>(null);
 
@@ -240,7 +238,6 @@ export default function LiveMap({
 
   const [showAlgoRace, setShowAlgoRace] = useState(false);
   const algoRaceReqIdRef = useRef(0);
-
   // Dynamic Roadblock Injection
   const [activeRoadblocks, setActiveRoadblocks] = useState<[number, number][]>([]);
   const roadblocksRef = useRef<[number, number][]>([]);
@@ -261,7 +258,7 @@ export default function LiveMap({
     stoppedAtRoadblock.current = false;
     roadblockStopIdx.current = null;
     // Update the route line on the map
-    const src = map.current?.getSource('aegis-route') as any;
+    const src = map.current?.getSource('vitalpath-route') as any;
     if (src) {
       src.setData({
         type: 'FeatureCollection',
@@ -329,8 +326,7 @@ export default function LiveMap({
 
     // Vehicle marker
     const el = document.createElement('div');
-    el.className = 'ambulance-marker';
-    el.style.width = '40px';
+    el.className = 'ambulance-marker';    el.style.width = '40px';
     el.style.height = '40px';
     el.style.display = 'flex';
     el.style.alignItems = 'center';
@@ -359,22 +355,19 @@ export default function LiveMap({
         <circle cx="46" cy="44" r="2" fill="#ef4444"/>
       </svg>
     `;
-
     ambulanceMarker.current = new maplibregl.Marker({ element: el }).setLngLat([DEFAULT_CENTER.lng, DEFAULT_CENTER.lat]).addTo(map.current);
 
     map.current.on('load', () => {
-      map.current?.addSource('aegis-route', {
-        type: 'geojson',
+      map.current?.addSource('vitalpath-route', {        type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       });
 
       map.current?.addLayer({
-        id: 'aegis-route-line',
+        id: 'vitalpath-route-line',
         type: 'line',
-        source: 'aegis-route',
+        source: 'vitalpath-route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-width': 6, 'line-color': '#ef4444', 'line-opacity': 0.85 },
-      });
+        paint: { 'line-width': 6, 'line-color': '#ef4444', 'line-opacity': 0.85 },      });
 
       // Road closure markers source
       map.current?.addSource('road-closures', {
@@ -457,7 +450,6 @@ export default function LiveMap({
 
     pendingRerouteRef.current = null;
     if (rerouteIntervalRef.current) { clearInterval(rerouteIntervalRef.current); rerouteIntervalRef.current = null; }
-
     // Prevent full reset if this is just a status update (e.g. patient pickup)
     if (activeScenario?.title === prevScenarioTitleRef.current && activeScenario?.patientOnBoard !== prevPatientStatusRef.current) {
       prevPatientStatusRef.current = activeScenario?.patientOnBoard;
@@ -493,8 +485,7 @@ export default function LiveMap({
       setRouteReady(false);
       setRouteCoordinates([]);
       if (destMarker.current) { destMarker.current.remove(); destMarker.current = null; }
-      const routeSrc = map.current?.getSource('aegis-route') as any;
-      if (routeSrc) routeSrc.setData({ type: 'FeatureCollection', features: [] });
+      const routeSrc = map.current?.getSource('vitalpath-route') as any;      if (routeSrc) routeSrc.setData({ type: 'FeatureCollection', features: [] });
       // --- End cleanup ---
 
       // Determine invalid/initial sequence
@@ -587,7 +578,6 @@ export default function LiveMap({
       } else if (ambulanceMarker.current) {
         ambulanceMarker.current.setLngLat(coords[0]);
       }
-
       // Store comparison stats for the current algorithm
       const statsEntry: AlgoStats = {
         exec_ms: Number(res.data.execution_time_ms ?? 0),
@@ -638,7 +628,7 @@ export default function LiveMap({
           },
         ],
       };
-      const src = map.current?.getSource('aegis-route') as any;
+      const src = map.current?.getSource('vitalpath-route') as any;
       if (src) src.setData(geojson);
 
       // Center camera on the route
@@ -659,8 +649,7 @@ export default function LiveMap({
         setRouteCoordinates(coords);
       } else {
         setRouteReady(true);  // enable GO button, wait for user click
-      }
-    } catch (e: any) {
+      }    } catch (e: any) {
       // Ignore aborted requests
       if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') return;
       console.error('Route fetch failed', e);
@@ -719,8 +708,7 @@ export default function LiveMap({
     if (destMarker.current) { destMarker.current.remove(); destMarker.current = null; }
 
     // Clear the route line from the map
-    const src = map.current?.getSource('aegis-route') as any;
-    if (src) src.setData({ type: 'FeatureCollection', features: [] });
+    const src = map.current?.getSource('vitalpath-route') as any;    if (src) src.setData({ type: 'FeatureCollection', features: [] });
   };
 
   // Fetch stats for both algorithms (for comparison panel)
@@ -1097,8 +1085,7 @@ export default function LiveMap({
       const res = await api.get('/api/algo/autocomplete', { params: { q: destQuery.trim() } });
       const results = res.data?.results || [];
       if (!results.length) {
-        setRouteError('No addresses found in the DMV area. Try a more specific query.');
-        setIsRouting(false);
+        setRouteError('No addresses found in the DMV area. Try a more specific query.');        setIsRouting(false);
         return;
       }
       const top = results[0];
@@ -1111,8 +1098,7 @@ export default function LiveMap({
       setRouteError(
         e?.response?.data?.detail ||
         e?.message ||
-        'Geocode failed. Try a more specific address in the DMV area.'
-      );
+        'Geocode failed. Try a more specific address in the DMV area.'      );
       setIsRouting(false);
     }
   };
@@ -1130,8 +1116,7 @@ export default function LiveMap({
 
     try {
       const res = await api.get('/api/algo/autocomplete', {
-        params: { q: query.trim() },
-        signal: controller.signal,
+        params: { q: query.trim() },        signal: controller.signal,
       });
       const results = res.data?.results || [];
       setSuggestions(results);
@@ -1180,7 +1165,6 @@ export default function LiveMap({
     setSimRunning(true);
 
     const SIM_SPEEDUP = 8; // demo speed multiplier: increases how fast the vehicle progresses along the real route timebase
-
     const tick = () => {
       const m = routeRef.current;
       if (!m || !ambulanceMarker.current || !map.current) return;
@@ -1199,8 +1183,7 @@ export default function LiveMap({
         // Clear auto-reroute on arrival
         if (rerouteIntervalRef.current) { clearInterval(rerouteIntervalRef.current); rerouteIntervalRef.current = null; }
         // Clear the route line — trip is done
-        const src = map.current?.getSource('aegis-route') as any;
-        if (src) src.setData({ type: 'FeatureCollection', features: [] });
+        const src = map.current?.getSource('vitalpath-route') as any;        if (src) src.setData({ type: 'FeatureCollection', features: [] });
         // final nav push
         const finalNav = computeNavLive(
           { totalDist: m.totalDist, totalTime, steps: m.steps, algorithm: m.algorithm },
@@ -1282,10 +1265,9 @@ export default function LiveMap({
       ambulanceMarker.current.setLngLat(pos);
       setCurrentPos(pos);
 
-      // Trim the route line: only show the path AHEAD of the vehicle
+      // Trim the route line: only show the path A of the vehicle
       const remainingCoords: [number, number][] = [pos, ...m.coords.slice(i)];
-      const src = map.current?.getSource('aegis-route') as any;
-      if (src) {
+      const src = map.current?.getSource('vitalpath-route') as any;      if (src) {
         src.setData({
           type: 'FeatureCollection',
           features: [{
@@ -1373,8 +1355,7 @@ export default function LiveMap({
               className={`w-2 h-2 rounded-full ${activeScenario?.isRedAlert ? 'bg-amber-500 animate-pulse' : 'bg-red-400'
                 }`}
             />
-            <span className="text-red-400 text-[10px] font-mono font-bold uppercase tracking-tighter">
-              {activeScenario?.title || 'SYSTEM IDLE'}
+            <span className="text-red-400 text-[10px] font-mono font-bold uppercase tracking-tighter">              {activeScenario?.title || 'SYSTEM IDLE'}
             </span>
           </div>
           <div className="text-[9px] text-gray-500 font-mono">
@@ -1438,8 +1419,7 @@ export default function LiveMap({
             >
               ✕
             </button>
-          )}
-        </div>
+          )}        </div>
       </div>
 
       {/* Bottom-left Dev panel */}
@@ -1448,8 +1428,7 @@ export default function LiveMap({
           <div className="bg-black/90 backdrop-blur-xl p-4 rounded-lg border border-red-500/30 min-w-[300px] flex flex-col gap-3 shadow-[0_0_30px_rgba(239,68,68,0.1)]">
             {/* Algorithm Comparison */}
             <div>
-              <div className="text-[10px] text-red-400 font-mono font-bold uppercase tracking-wider mb-2">Algorithm Comparison</div>
-              {isFetchingStats ? (
+              <div className="text-[10px] text-red-400 font-mono font-bold uppercase tracking-wider mb-2">Algorithm Comparison</div>              {isFetchingStats ? (
                 <div className="text-[9px] text-gray-400 font-mono animate-pulse">Fetching both routes...</div>
               ) : (
                 <div className="grid grid-cols-3 gap-1 text-[9px] font-mono">
@@ -1466,8 +1445,7 @@ export default function LiveMap({
                   <div className="text-purple-200 text-center">{algoStats.bmsssp ? formatEta(algoStats.bmsssp.eta_s) : '—'}</div>
 
                   <div className="text-gray-500">DIST</div>
-                  <div className="text-red-200 text-center">{algoStats.dijkstra ? `${(algoStats.dijkstra.dist_m / 1000).toFixed(2)}km` : '—'}</div>
-                  <div className="text-purple-200 text-center">{algoStats.bmsssp ? `${(algoStats.bmsssp.dist_m / 1000).toFixed(2)}km` : '—'}</div>
+                  <div className="text-red-200 text-center">{algoStats.dijkstra ? `${(algoStats.dijkstra.dist_m / 1000).toFixed(2)}km` : '—'}</div>                  <div className="text-purple-200 text-center">{algoStats.bmsssp ? `${(algoStats.bmsssp.dist_m / 1000).toFixed(2)}km` : '—'}</div>
                 </div>
               )}
             </div>
@@ -1477,16 +1455,14 @@ export default function LiveMap({
 
             {/* Tactical Injections */}
             <div>
-              <div className="text-[10px] text-red-500/60 font-mono font-bold uppercase tracking-wider mb-2">Tactical Injections</div>
-              <div className="flex flex-col gap-1.5">
+              <div className="text-[10px] text-red-500/60 font-mono font-bold uppercase tracking-wider mb-2">Tactical Injections</div>              <div className="flex flex-col gap-1.5">
                 {Object.entries(SCENARIOS).map(([key, data]) => {
                   const isOrganTransport = key === 'ORGAN_TRANSPORT';
                   const btnClass = isOrganTransport
                     ? 'border-blue-400 text-blue-300 bg-blue-500/20 hover:bg-blue-500/40 hover:text-white hover:border-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.25)]'
                     : data.isRedAlert
                       ? 'border-amber-500/40 text-amber-500 bg-amber-500/5 hover:bg-amber-500 hover:text-black hover:border-amber-400 shadow-[0_0_15px_rgba(234,179,8,0.3)]'
-                      : 'border-red-500/40 text-red-400 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_rgba(239,68,68,0.15)]';
-                  return (
+                      : 'border-red-500/40 text-red-400 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_rgba(239,68,68,0.15)]';                  return (
                     <button
                       key={key}
                       onClick={() => {
@@ -1536,14 +1512,12 @@ export default function LiveMap({
           className={
             showEtaPanel
               ? 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-red-500/30 border-red-400/50 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
-              : 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-black/80 backdrop-blur-xl border-white/10 text-gray-400 hover:text-red-300 hover:border-red-500/30'
-          }
+              : 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-black/80 backdrop-blur-xl border-white/10 text-gray-400 hover:text-red-300 hover:border-red-500/30'          }
         >
           {showEtaPanel ? '✕ DEV' : '⚙ DEV'}
         </button>
 
       </div>
-
       {/* Algorithm Race Mini-Map (bottom-right) */}
       <AlgoRaceMiniMap data={algoRaceData} visible={showAlgoRace} />
     </div>

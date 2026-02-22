@@ -14,7 +14,6 @@ from app.services.gemini import (
 from fastapi.responses import Response
 from app.services.voice import generate_voice_stream
 
-
 app = FastAPI(
     title="VitalPath AI API",
     description="Backend for VitalPath AI - Organ & critical medical transport. Routing, telemetry, AI cargo integrity, risk, mission logging, alerts.",
@@ -45,7 +44,6 @@ app.add_middleware(
 app.include_router(algo_router.router, prefix="/api/algo", tags=["algorithm"])
 app.include_router(vitalpath_router.router, prefix="/api/vitalpath", tags=["vitalpath"])
 
-
 @app.on_event("startup")
 def startup_gemini_log():
     s = get_gemini_status()
@@ -66,6 +64,7 @@ def read_root():
 def ai_status():
     """Check if Gemini key is loaded (for debugging). No key value is exposed."""
     return get_gemini_status()
+
 
 @app.post("/api/ai/chat")
 async def chat_endpoint(req: ChatRequest):

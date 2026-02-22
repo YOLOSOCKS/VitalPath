@@ -1,5 +1,5 @@
 {
-  "name": "aegis-bmsssp-runner",
+  "name": "vitalpath-ai-bmsssp-runner",
   "private": true,
   "type": "module",
   "dependencies": {
