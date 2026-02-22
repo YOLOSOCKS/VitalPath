@@ -1,53 +1,28 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// --- SVG Fingerprint Icon ---
-const FingerprintIcon = ({ size = 80 }: { size?: number }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 4" />
-        <path d="M5 19.5C5.5 18 6 15 6 12c0-3.5 2.5-6 6-6a6 6 0 0 1 4.8 2.4" />
-        <path d="M9 12c0-1.7 1.3-3 3-3a3 3 0 0 1 3 3v1" />
-        <path d="M12 12v4c0 2.5-.5 4-2 5.5" />
-        <path d="M8.5 16.5c-.3 1.5-.5 3-1 4.5" />
-        <path d="M15 13v2c0 3-1 5.5-3 7.5" />
-        <path d="M18 12a9 9 0 0 0-1-4" />
-        <path d="M18 12v1c0 4-1.5 7-4 9" />
-        <path d="M22 16c-1 3-3.5 6-7 8" />
-    </svg>
-);
-
 interface WelcomeScreenProps {
     onComplete: () => void;
 }
 
+const MISSION_LINES = [
+    'Every Minute Counts.',
+    'Every Organ Matters.',
+    'Every Life Saved.',
+];
+
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
-    const [scanning, setScanning] = useState(false);
-    const [authenticated, setAuthenticated] = useState(false);
     const [exiting, setExiting] = useState(false);
 
-    const handleFingerprintClick = () => {
-        if (scanning) return;
-        setScanning(true);
-
-        // After ripple plays, show "AUTHENTICATED"
-        setTimeout(() => {
-            setAuthenticated(true);
-        }, 1200);
-
-        // After confirmation, begin exit
-        setTimeout(() => {
-            setExiting(true);
-        }, 2000);
-
-        // After exit animation, remove welcome screen
-        setTimeout(() => {
-            onComplete();
-        }, 2800);
+    const handleBeginClick = () => {
+        if (exiting) return;
+        setExiting(true);
+        setTimeout(() => onComplete(), 600);
     };
 
     return (
         <motion.div
-            className="welcome-screen"
+            className="welcome-screen welcome-screen-red"
             initial={{ opacity: 1 }}
             animate={exiting ? { opacity: 0, scale: 1.1 } : { opacity: 1, scale: 1 }}
             transition={{ duration: 0.8, ease: 'easeInOut' }}
@@ -59,27 +34,24 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'radial-gradient(ellipse at center, #0a1628 0%, #050505 60%, #000000 100%)',
+                background: 'radial-gradient(ellipse at center, #1a0a0a 0%, #0a0505 50%, #000000 100%)',
                 overflow: 'hidden',
                 cursor: 'default',
             }}
         >
-            {/* Animated grid background */}
             <div
                 style={{
                     position: 'absolute',
                     inset: 0,
-                    opacity: 0.04,
-                    backgroundImage: 'linear-gradient(#00f0ff 1px, transparent 1px), linear-gradient(90deg, #00f0ff 1px, transparent 1px)',
+                    opacity: 0.05,
+                    backgroundImage: 'linear-gradient(#ef4444 1px, transparent 1px), linear-gradient(90deg, #ef4444 1px, transparent 1px)',
                     backgroundSize: '50px 50px',
                     pointerEvents: 'none',
                 }}
             />
 
-            {/* Scanning line */}
-            <div className="welcome-scanline" />
+            <div className="welcome-scanline welcome-scanline-red" />
 
-            {/* Logo */}
             <motion.div
                 initial={{ opacity: 0, scale: 0.3, y: 40 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -95,10 +67,10 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                         fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
                         margin: 0,
                         lineHeight: 1,
-                        textShadow: '0 0 40px rgba(0, 240, 255, 0.3), 0 0 80px rgba(0, 240, 255, 0.1)',
+                        textShadow: '0 0 40px rgba(239, 68, 68, 0.3), 0 0 80px rgba(239, 68, 68, 0.15)',
                     }}
                 >
-                    VitalPath AI
+                    <span style={{ color: '#ef4444', textShadow: '0 0 40px rgba(239, 68, 68, 0.6), 0 0 80px rgba(239, 68, 68, 0.25)' }}>Vital</span><span style={{ color: '#fff' }}>Path AI</span>
                 </h1>
 
                 <motion.div
@@ -109,19 +81,18 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                         fontFamily: 'ui-monospace, SFMono-Regular, monospace',
                         fontSize: '0.85rem',
                         letterSpacing: '0.3em',
-                        color: '#00f0ff',
+                        color: '#f87171',
                         textTransform: 'uppercase',
                         marginTop: '0.75rem',
-                        opacity: 0.7,
+                        opacity: 0.85,
                     }}
                 >
-                    Paramedic Dashboard
+                    Automated Organ Transport Dashboard
                 </motion.div>
             </motion.div>
 
-            {/* Mission Statement */}
             <div style={{ marginTop: '3rem', textAlign: 'center', position: 'relative', zIndex: 2 }}>
-                {['FASTER RESPONSE', 'SMARTER SUPPORT', 'SAFER LIVES'].map((text, i) => (
+                {MISSION_LINES.map((text, i) => (
                     <motion.div
                         key={text}
                         initial={{ opacity: 0, x: -30 }}
@@ -130,139 +101,60 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                         style={{
                             fontFamily: 'ui-monospace, SFMono-Regular, monospace',
                             fontSize: 'clamp(0.85rem, 2vw, 1.1rem)',
-                            letterSpacing: '0.25em',
-                            color: i === 2 ? '#00f0ff' : 'rgba(255,255,255,0.6)',
+                            letterSpacing: '0.2em',
+                            color: i === 2 ? '#f87171' : 'rgba(255,255,255,0.6)',
                             fontWeight: i === 2 ? 700 : 400,
                             marginBottom: '0.6rem',
-                            textTransform: 'uppercase',
-                            textShadow: i === 2 ? '0 0 20px rgba(0, 240, 255, 0.4)' : 'none',
+                            textShadow: i === 2 ? '0 0 20px rgba(239, 68, 68, 0.5)' : 'none',
                         }}
                     >
-                        {text === 'FASTER RESPONSE' && '▸ '}
-                        {text === 'SMARTER SUPPORT' && '▸ '}
-                        {text === 'SAFER LIVES' && '▸ '}
-                        {text}
+                        ▸ {text}
                     </motion.div>
                 ))}
             </div>
 
-            {/* Fingerprint Section */}
             <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 2.6, duration: 0.8 }}
-                style={{
-                    marginTop: '4rem',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    position: 'relative',
-                    zIndex: 2,
-                    cursor: 'pointer',
-                }}
-                onClick={handleFingerprintClick}
+                style={{ marginTop: '4rem', position: 'relative', zIndex: 2 }}
             >
-                {/* Ripple rings on scan */}
-                <AnimatePresence>
-                    {scanning && !authenticated && (
-                        <>
-                            {[0, 1, 2, 3].map((ring) => (
-                                <motion.div
-                                    key={`ripple-${ring}`}
-                                    initial={{ scale: 0.5, opacity: 0.8 }}
-                                    animate={{ scale: 3 + ring * 0.5, opacity: 0 }}
-                                    exit={{ opacity: 0 }}
-                                    transition={{
-                                        duration: 1.5,
-                                        delay: ring * 0.2,
-                                        ease: 'easeOut',
-                                    }}
-                                    style={{
-                                        position: 'absolute',
-                                        width: 80,
-                                        height: 80,
-                                        borderRadius: '50%',
-                                        border: '2px solid #00f0ff',
-                                        top: '50%',
-                                        left: '50%',
-                                        transform: 'translate(-50%, -50%)',
-                                        pointerEvents: 'none',
-                                    }}
-                                />
-                            ))}
-                        </>
-                    )}
-                </AnimatePresence>
-
-                {/* Authenticated flash */}
-                <AnimatePresence>
-                    {authenticated && !exiting && (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.3 }}
-                            style={{
-                                position: 'absolute',
-                                top: -45,
-                                width: 200,
-                                textAlign: 'center',
-                                fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                                fontSize: '0.7rem',
-                                letterSpacing: '0.3em',
-                                color: '#22c55e',
-                                fontWeight: 700,
-                                textShadow: '0 0 15px rgba(34, 197, 94, 0.6)',
-                            }}
-                        >
-                            ✓ IDENTITY VERIFIED
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Fingerprint icon button */}
-                <div
-                    className={`welcome-fingerprint ${scanning ? 'welcome-fingerprint-scanning' : ''} ${authenticated ? 'welcome-fingerprint-authenticated' : ''}`}
+                <motion.button
+                    type="button"
+                    onClick={handleBeginClick}
+                    disabled={exiting}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.98 }}
                     style={{
-                        width: 100,
-                        height: 100,
-                        borderRadius: '50%',
-                        border: `2px solid ${authenticated ? '#22c55e' : '#00f0ff'}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: authenticated ? '#22c55e' : '#00f0ff',
-                        transition: 'all 0.4s ease',
-                        background: authenticated
-                            ? 'rgba(34, 197, 94, 0.1)'
-                            : scanning
-                                ? 'rgba(0, 240, 255, 0.15)'
-                                : 'rgba(0, 240, 255, 0.05)',
-                    }}
-                >
-                    <FingerprintIcon size={50} />
-                </div>
-
-                {/* Label */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 3.0, duration: 0.5 }}
-                    style={{
-                        marginTop: '1rem',
                         fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                        fontSize: '0.65rem',
+                        fontSize: '1rem',
                         letterSpacing: '0.35em',
-                        color: authenticated ? '#22c55e' : 'rgba(255,255,255,0.4)',
+                        fontWeight: 700,
                         textTransform: 'uppercase',
-                        transition: 'color 0.4s ease',
+                        color: '#f87171',
+                        background: 'rgba(239, 68, 68, 0.08)',
+                        border: '2px solid rgba(239, 68, 68, 0.5)',
+                        borderRadius: 8,
+                        padding: '1rem 2.5rem',
+                        cursor: exiting ? 'default' : 'pointer',
+                        boxShadow: '0 0 30px rgba(239, 68, 68, 0.2)',
+                        transition: 'border-color 0.2s, box-shadow 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                        if (!exiting) {
+                            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.9)';
+                            e.currentTarget.style.boxShadow = '0 0 40px rgba(239, 68, 68, 0.35)';
+                        }
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                        e.currentTarget.style.boxShadow = '0 0 30px rgba(239, 68, 68, 0.2)';
                     }}
                 >
-                    {authenticated ? 'ACCESS GRANTED' : 'AUTHENTICATE TO CONTINUE'}
-                </motion.div>
+                    {exiting ? '…' : 'Begin'}
+                </motion.button>
             </motion.div>
 
-            {/* Bottom decorative line */}
             <motion.div
                 initial={{ scaleX: 0 }}
                 animate={{ scaleX: 1 }}
@@ -272,13 +164,12 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                     bottom: '2rem',
                     width: '60%',
                     height: 1,
-                    background: 'linear-gradient(90deg, transparent, rgba(0,240,255,0.3), transparent)',
+                    background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.4), transparent)',
                     transformOrigin: 'center',
                     zIndex: 2,
                 }}
             />
 
-            {/* Full-screen flash on authentication */}
             <AnimatePresence>
                 {exiting && (
                     <motion.div
@@ -288,7 +179,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                         style={{
                             position: 'absolute',
                             inset: 0,
-                            background: 'radial-gradient(circle, rgba(0,240,255,0.4) 0%, transparent 70%)',
+                            background: 'radial-gradient(circle, rgba(239,68,68,0.35) 0%, transparent 70%)',
                             zIndex: 10,
                             pointerEvents: 'none',
                         }}

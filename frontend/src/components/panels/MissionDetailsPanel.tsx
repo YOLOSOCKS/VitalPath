@@ -86,7 +86,7 @@ export default function MissionDetailsPanel({
         className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden cursor-pointer transition-all duration-300 ${className} ${open ? 'min-h-[120px]' : 'h-12 shrink-0'}`}
       >
         <div className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-white/5">
-          <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase">Mission Summary</h2>
+          <h2 className="text-red-400 font-mono text-sm tracking-widest uppercase">Mission Summary</h2>
           <span className="text-gray-500 text-[10px] font-mono">{open ? '▼' : '▲'}</span>
         </div>
         {open && (
@@ -111,7 +111,7 @@ export default function MissionDetailsPanel({
         onClick={onToggle}
         className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-white/5 cursor-pointer hover:bg-white/5"
       >
-        <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase">Mission Summary</h2>
+        <h2 className="text-red-400 font-mono text-sm tracking-widest uppercase">Mission Summary</h2>
         <span className="text-gray-500 text-[10px] font-mono">{open ? '▼' : '▲'}</span>
       </div>
       {open && (
@@ -119,7 +119,7 @@ export default function MissionDetailsPanel({
       {/* Donor / Recipient */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono mb-3">
         <div className="text-gray-500 uppercase">Donor</div>
-        <div className="text-right text-cyan-300 truncate" title={plan.donor_hospital}>
+        <div className="text-right text-red-300 truncate" title={plan.donor_hospital}>
           {plan.donor_hospital.replace(/\b\w/g, (c) => c.toUpperCase())}
         </div>
         <div className="text-gray-500 uppercase">Recipient</div>
@@ -135,7 +135,7 @@ export default function MissionDetailsPanel({
         <span className="text-2xl" title={MODE_LABELS[plan.transport_mode]}>
           {MODE_ICONS[plan.transport_mode]}
         </span>
-        <span className="text-cyan-400 font-mono text-sm font-bold uppercase tracking-wider">
+        <span className="text-red-400 font-mono text-sm font-bold uppercase tracking-wider">
           {MODE_LABELS[plan.transport_mode]}
         </span>
         <span className={`ml-auto px-2 py-0.5 rounded border text-[10px] font-mono font-bold uppercase ${riskColor}`}>
@@ -148,7 +148,7 @@ export default function MissionDetailsPanel({
         <div className="text-gray-500 uppercase">Max safe time</div>
         <div className="text-right text-white">{formatMinutes(plan.max_safe_time_s)}</div>
         <div className="text-gray-500 uppercase">ETA</div>
-        <div className="text-right text-cyan-400 font-bold">{formatDuration(plan.eta_total_s)}</div>
+        <div className="text-right text-red-400 font-bold">{formatDuration(plan.eta_total_s)}</div>
       </div>
 
       {/* Mission progress bar (optional) */}

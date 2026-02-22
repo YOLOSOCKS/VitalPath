@@ -60,7 +60,7 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
   return (
     <div className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden ${className}`}>
       <div className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-white/5">
-        <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase">
+        <h2 className="text-red-400 font-mono text-sm tracking-widest uppercase">
           Cargo Status
         </h2>
         <div className="flex items-center gap-2">
@@ -80,9 +80,9 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
 
       {isEnRouteToPickup && (
         <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
-          <div className="text-cyan-600 text-3xl mb-3 animate-pulse">📍</div>
-          <div className="text-cyan-500 font-mono text-sm tracking-wider uppercase mb-1">EN ROUTE TO PICKUP</div>
-          <div className="text-cyan-600/70 font-mono text-[10px] tracking-wide">Telemetry after cargo loaded</div>
+          <div className="text-red-600 text-3xl mb-3 animate-pulse">📍</div>
+          <div className="text-red-500 font-mono text-sm tracking-wider uppercase mb-1">EN ROUTE TO PICKUP</div>
+          <div className="text-red-600/70 font-mono text-[10px] tracking-wide">Telemetry after cargo loaded</div>
         </div>
       )}
 
@@ -104,7 +104,7 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
             </div>
             <div className="bg-white/5 border border-white/10 p-2 rounded">
               <div className="text-gray-400 text-[10px] font-mono">Shock</div>
-              <div className={`text-2xl font-mono font-bold ${shock > 2 ? 'text-amber-400' : 'text-cyan-400'}`}>{shock.toFixed(2)}g</div>
+              <div className={`text-2xl font-mono font-bold ${shock > 2 ? 'text-amber-400' : 'text-red-400'}`}>{shock.toFixed(2)}g</div>
             </div>
             <div className="bg-white/5 border border-white/10 p-2 rounded">
               <div className="text-gray-400 text-[10px] font-mono">Lid seal</div>
@@ -112,7 +112,7 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
             </div>
             <div className="bg-white/5 border border-white/10 p-2 rounded">
               <div className="text-gray-400 text-[10px] font-mono">Battery</div>
-              <div className="text-2xl text-cyan-400 font-mono font-bold">{battery}%</div>
+              <div className="text-2xl text-red-400 font-mono font-bold">{battery}%</div>
             </div>
           </div>
 

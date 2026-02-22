@@ -175,7 +175,7 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
         className="h-14 min-h-[56px] shrink-0 px-4 py-3 border-b border-white/10 bg-white/5 flex items-center justify-between cursor-pointer hover:bg-white/5 w-full"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase truncate">
+          <h2 className="text-red-400 font-mono text-sm tracking-widest uppercase truncate">
             CARGO GUARDIAN
           </h2>
           <div className={`w-2 h-2 rounded-full shrink-0 ${isLoading ? 'bg-yellow-400 animate-ping' : 'bg-green-500'}`} />
@@ -185,7 +185,7 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
             <button
               onClick={(e) => { e.stopPropagation(); setIsVoiceEnabled(!isVoiceEnabled); }}
               className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-colors ${
-                isVoiceEnabled ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' : 'bg-gray-800 border-gray-600 text-gray-500'
+                isVoiceEnabled ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-gray-800 border-gray-600 text-gray-500'
               }`}
             >
               VOICE: {isVoiceEnabled ? 'ON' : 'OFF'}
@@ -197,12 +197,12 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
 
       {open && (
       <>
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 font-mono text-xs scrollbar-thin scrollbar-thumb-cyan-900">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 font-mono text-xs scrollbar-thin scrollbar-thumb-red-900">
         {messages.map((m, i) => (
           <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
             <div className={`max-w-[90%] p-2 rounded border ${
               m.role === 'user' 
-                ? 'bg-cyan-950/30 border-cyan-500/50 text-cyan-100' 
+                ? 'bg-red-950/30 border-red-500/50 text-red-100' 
                 : 'bg-black/50 border-white/20 text-gray-300'
             }`}>
               {m.text.split('\n').map((line, idx) => (
@@ -212,7 +212,7 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
             <span className="text-[9px] text-gray-600 mt-1">{m.timestamp}</span>
           </div>
         ))}
-        {isLoading && <div className="text-cyan-400 animate-pulse font-mono text-[10px] uppercase">Analyzing cargo status...</div>}
+        {isLoading && <div className="text-red-400 animate-pulse font-mono text-[10px] uppercase">Analyzing cargo status...</div>}
       </div>
 
       <div className="p-2 border-t border-white/10 bg-black/50 flex gap-2">
@@ -222,7 +222,7 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
           placeholder="Ask about cargo, route, or next steps..."
-          className="flex-1 bg-transparent border-none outline-none text-cyan-400 font-mono text-xs placeholder-gray-700"
+          className="flex-1 bg-transparent border-none outline-none text-red-400 font-mono text-xs placeholder-gray-700"
           disabled={isLoading}
         />
         <button 
@@ -231,7 +231,7 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
           className={`px-3 py-1 font-mono text-xs transition-all ${
             isLoading 
               ? 'bg-gray-800 text-gray-600 border border-gray-700 cursor-not-allowed' 
-              : 'bg-cyan-900/40 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-800/50 hover:border-cyan-400 shadow-[0_0_10px_rgba(0,240,255,0.1)]'
+              : 'bg-red-900/40 border border-red-500/30 text-red-400 hover:bg-red-800/50 hover:border-red-400 shadow-[0_0_10px_rgba(239,68,68,0.1)]'
           }`}
         >
           {isLoading ? '...' : 'SEND'}

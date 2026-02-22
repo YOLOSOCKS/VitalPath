@@ -20,7 +20,7 @@ export default function AITransparency() {
         </div>
 
         <section className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-cyan-400 font-mono uppercase tracking-wider mb-3">
+          <h2 className="text-lg font-semibold text-red-400 font-mono uppercase tracking-wider mb-3">
             What VitalPath AI Does
           </h2>
           <p className="text-gray-300 text-sm leading-relaxed mb-3">
@@ -34,7 +34,7 @@ export default function AITransparency() {
         </section>
 
         <section className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-cyan-400 font-mono uppercase tracking-wider mb-3">
+          <h2 className="text-lg font-semibold text-red-400 font-mono uppercase tracking-wider mb-3">
             AI Limitations
           </h2>
           <ul className="space-y-2 text-gray-300 text-sm leading-relaxed list-disc list-inside">
@@ -45,7 +45,7 @@ export default function AITransparency() {
         </section>
 
         <section className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-cyan-400 font-mono uppercase tracking-wider mb-3">
+          <h2 className="text-lg font-semibold text-red-400 font-mono uppercase tracking-wider mb-3">
             Confidence Levels
           </h2>
           <p className="text-gray-300 text-sm leading-relaxed mb-4">
@@ -66,7 +66,7 @@ export default function AITransparency() {
         </section>
 
         <section className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-cyan-400 font-mono uppercase tracking-wider mb-3">
+          <h2 className="text-lg font-semibold text-red-400 font-mono uppercase tracking-wider mb-3">
             Policy &amp; Regulatory Awareness
           </h2>
           <p className="text-gray-300 text-sm leading-relaxed mb-3">
@@ -80,7 +80,7 @@ export default function AITransparency() {
         </section>
 
         <section className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-cyan-400 font-mono uppercase tracking-wider mb-3">
+          <h2 className="text-lg font-semibold text-red-400 font-mono uppercase tracking-wider mb-3">
             How We Use AI
           </h2>
           <p className="text-gray-300 text-sm leading-relaxed mb-3">
@@ -93,8 +93,8 @@ export default function AITransparency() {
           </p>
         </section>
 
-        <section className="bg-black/60 backdrop-blur-xl border border-cyan-500/30 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-cyan-400 font-mono uppercase tracking-wider mb-3">
+        <section className="bg-black/60 backdrop-blur-xl border border-red-500/30 rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-red-400 font-mono uppercase tracking-wider mb-3">
             Transparency Commitment
           </h2>
           <p className="text-gray-300 text-sm leading-relaxed space-y-2">

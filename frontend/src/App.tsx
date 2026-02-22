@@ -30,7 +30,7 @@ class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
           <div className="text-red-400 text-xl mb-2">⚠ MAP CRASH</div>
           <div className="text-sm text-gray-300 max-w-md break-all">{this.state.error?.message}</div>
           <div className="text-xs text-gray-500 mt-2 max-w-md break-all whitespace-pre-wrap">{this.state.error?.stack?.slice(0, 500)}</div>
-          <button onClick={() => this.setState({ hasError: false, error: null })} className="mt-4 px-3 py-1 bg-cyan-600 rounded text-sm">Retry</button>
+          <button onClick={() => this.setState({ hasError: false, error: null })} className="mt-4 px-3 py-1 bg-red-600 rounded text-sm">Retry</button>
         </div>
       );
     }
@@ -177,26 +177,26 @@ function App() {
       <header className="h-14 shrink-0 border-b border-white/10 bg-black/50 backdrop-blur-lg flex items-center justify-between px-6 z-50">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold tracking-tighter text-white uppercase">
-            VitalPath <span className="text-cyan-400 text-sm font-normal tracking-widest ml-2">// CARGO MONITOR</span>
+            <span className="text-red-400">Vital</span>Path <span className="text-red-400 text-sm font-normal tracking-widest ml-2">// CARGO MONITOR</span>
           </h1>
           <nav className="flex items-center gap-2 ml-4">
             <a
               href="#/"
               onClick={(e) => { e.preventDefault(); window.location.hash = ''; setCurrentView('dashboard'); }}
-              className={`px-3 py-1.5 rounded font-mono text-xs uppercase tracking-wider transition-all ${currentView === 'dashboard' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50' : 'text-gray-400 border border-transparent hover:text-white hover:border-white/30'}`}
+              className={`px-3 py-1.5 rounded font-mono text-xs uppercase tracking-wider transition-all ${currentView === 'dashboard' ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'text-gray-400 border border-transparent hover:text-white hover:border-white/30'}`}
             >
               Dashboard
             </a>
             <a
               href="#/ai-transparency"
               onClick={(e) => { e.preventDefault(); window.location.hash = '#/ai-transparency'; setCurrentView('ai-transparency'); }}
-              className={`px-3 py-1.5 rounded font-mono text-xs uppercase tracking-wider transition-all ${currentView === 'ai-transparency' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50' : 'text-gray-400 border border-transparent hover:text-white hover:border-white/30'}`}
+              className={`px-3 py-1.5 rounded font-mono text-xs uppercase tracking-wider transition-all ${currentView === 'ai-transparency' ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'text-gray-400 border border-transparent hover:text-white hover:border-white/30'}`}
             >
               AI Transparency
             </a>
           </nav>
           {audioError && (
-            <div className="px-2 py-0.5 bg-red-900/40 border border-red-500 rounded text-red-400 text-[10px] font-mono animate-pulse">
+            <div className="px-2 py-0.5 bg-amber-900/40 border border-amber-500 rounded text-amber-400 text-[10px] font-mono animate-pulse">
               AUDIO_BLOCKED: CLICK HEADER TO UNLOCK
             </div>
           )}
@@ -216,7 +216,7 @@ function App() {
               setIsRedAlert(!isRedAlert);
               setAudioError(false);
             }}
-            className={`px-4 py-1 rounded border font-mono text-xs transition-all ${isRedAlert ? 'bg-red-600 text-white border-red-500 animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-transparent text-gray-400 border-gray-700 hover:border-white'}`}
+            className={`px-4 py-1 rounded border font-mono text-xs transition-all ${isRedAlert ? 'bg-amber-500 text-black border-amber-400 animate-pulse shadow-[0_0_15px_rgba(234,179,8,0.5)]' : 'bg-transparent text-gray-400 border-gray-700 hover:border-white'}`}
           >
             {isRedAlert ? '⚠ CARGO ALERT' : 'STANDBY'}
           </button>
@@ -240,7 +240,7 @@ function App() {
           />
           <AIAssistant
             ref={aiRef}
-            className={`shrink-0 transition-all duration-500 border-cyan-500/30 shadow-[0_0_40px_rgba(0,240,255,0.2)] ${isRedAlert ? 'shadow-[0_0_60px_rgba(239,68,68,0.3)]' : ''}`}
+            className={`shrink-0 transition-all duration-500 border-red-500/30 shadow-[0_0_40px_rgba(239,68,68,0.2)] ${isRedAlert ? 'shadow-[0_0_60px_rgba(234,179,8,0.4)]' : ''}`}
           />
           <HospitalInfo className="shrink-0" />
         </div>

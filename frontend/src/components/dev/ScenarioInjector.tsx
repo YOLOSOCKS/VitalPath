@@ -43,7 +43,7 @@ const SCENARIOS = {
 export default function ScenarioInjector({ onInject }: { onInject: (s: any) => void }) {
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 p-2 bg-black/90 border border-white/20 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
-      <div className="px-3 py-1 text-[9px] text-cyan-500/50 font-mono font-bold tracking-widest border-r border-white/10 uppercase">
+      <div className="px-3 py-1 text-[9px] text-red-500/50 font-mono font-bold tracking-widest border-r border-white/10 uppercase">
         Tactical Injections
       </div>
 
@@ -54,7 +54,7 @@ export default function ScenarioInjector({ onInject }: { onInject: (s: any) => v
             onClick={() => onInject(data)}
             className={`px-4 py-1.5 text-[10px] font-mono font-bold rounded-lg border transition-all duration-300 transform hover:scale-105 active:scale-95 ${data.isRedAlert
               ? 'border-red-500/40 text-red-500 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_rgba(239,68,68,0.2)]'
-              : 'border-cyan-500/40 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500 hover:text-white shadow-[0_0_15px_rgba(0,240,255,0.2)]'
+              : 'border-red-500/40 text-red-400 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_rgba(239,68,68,0.2)]'
               }`}
           >
             {key.replace(/_/g, ' ')}

@@ -9,7 +9,7 @@ export default function HospitalInfo({ className }: { className?: string }) {
             className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden cursor-pointer transition-all duration-300 hover:bg-white/5 ${className} ${isOpen ? 'min-h-0' : 'h-12 shrink-0'}`}
         >
             <div className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-white/5">
-                <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase">
+                <h2 className="text-red-400 font-mono text-sm tracking-widest uppercase">
                     Receiving Facility
                 </h2>
                 <div className="flex items-center gap-2">
@@ -28,12 +28,12 @@ export default function HospitalInfo({ className }: { className?: string }) {
 
                     <div className="text-gray-500 uppercase">Handoff team</div>
                     <div className="text-right">
-                        <span className="text-cyan-400 font-bold">Standing by</span>
+                        <span className="text-red-400 font-bold">Standing by</span>
                     </div>
 
                     <div className="text-gray-500 uppercase">OR / Transplant</div>
                     <div className="text-right">
-                        <span className="text-cyan-400 font-bold">Ready</span>
+                        <span className="text-red-400 font-bold">Ready</span>
                     </div>
 
                     <div className="text-gray-500 uppercase">Receiving dock</div>
@@ -43,7 +43,7 @@ export default function HospitalInfo({ className }: { className?: string }) {
 
                     <div className="text-gray-500 uppercase">ETA window</div>
                     <div className="text-right">
-                        <span className="text-cyan-400 font-bold">Within spec</span>
+                        <span className="text-red-400 font-bold">Within spec</span>
                     </div>
 
                     <div className="text-gray-500 uppercase">Diversion</div>

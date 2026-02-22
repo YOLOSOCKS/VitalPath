@@ -48,7 +48,7 @@ export default function Navigation({
       className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden cursor-pointer transition-all duration-300 hover:bg-white/5 ${className} ${isOpen ? 'min-h-0' : 'h-12 shrink-0'}`}
     >
       <div className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-white/5">
-        <h2 className="text-cyan-400 font-mono text-sm tracking-widest uppercase">
+        <h2 className="text-red-400 font-mono text-sm tracking-widest uppercase">
           NAV // ROUTE TO DESTINATION
         </h2>
         <span className="text-gray-500 text-[10px] font-mono">{isOpen ? '▼' : '▲'}</span>
@@ -62,8 +62,8 @@ export default function Navigation({
               <span className="text-lg text-gray-500 ml-1">{dist.unit}</span>
             </div>
             <div className="flex items-center gap-2 mt-1">
-              <div className="text-2xl text-cyan-400 font-bold">{arrow}</div>
-              <div className="text-sm text-cyan-300 font-mono font-bold text-center max-w-[220px] leading-tight">
+              <div className="text-2xl text-red-400 font-bold">{arrow}</div>
+              <div className="text-sm text-red-300 font-mono font-bold text-center max-w-[220px] leading-tight">
                 {nextTurn}
               </div>
             </div>
@@ -78,7 +78,7 @@ export default function Navigation({
               </div>
               <div className="text-right">
                 <div className="text-[10px] text-gray-500 font-mono">ETA</div>
-                <div className={`text-xl font-mono font-bold ${activeScenario?.isRedAlert ? 'text-red-400' : 'text-green-400'} animate-pulse`}>
+                <div className={`text-xl font-mono font-bold ${activeScenario?.isRedAlert ? 'text-amber-400' : 'text-green-400'} animate-pulse`}>
                   {eta}
                 </div>
                 <div className="text-[9px] text-gray-500 font-mono mt-1">{sim}</div>

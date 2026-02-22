@@ -337,11 +337,11 @@ export default function LiveMap({
     el.style.justifyContent = 'center';
     el.style.willChange = 'transform';
     el.innerHTML = `
-      <svg id="veh" width="40" height="40" viewBox="0 0 64 64" style="filter: drop-shadow(0 0 10px #00f0ff);">
+      <svg id="veh" width="40" height="40" viewBox="0 0 64 64" style="filter: drop-shadow(0 0 10px #ef4444);">
         <!-- body -->
-        <rect x="8" y="18" width="48" height="26" rx="6" fill="#1e293b" stroke="#00f0ff" stroke-width="2"/>
+        <rect x="8" y="18" width="48" height="26" rx="6" fill="#1e293b" stroke="#ef4444" stroke-width="2"/>
         <!-- cab -->
-        <path d="M44 18 L56 18 Q58 18 58 20 L58 38 L44 38 Z" fill="#0f172a" stroke="#00f0ff" stroke-width="1.5"/>
+        <path d="M44 18 L56 18 Q58 18 58 20 L58 38 L44 38 Z" fill="#0f172a" stroke="#ef4444" stroke-width="1.5"/>
         <!-- windshield -->
         <path d="M46 22 L54 22 Q55 22 55 23 L55 32 L46 32 Z" fill="#38bdf8" opacity="0.5"/>
         <!-- red cross -->
@@ -353,10 +353,10 @@ export default function LiveMap({
           <animate attributeName="opacity" values="0.3;1;0.3" dur="0.8s" repeatCount="indefinite"/>
         </rect>
         <!-- wheels -->
-        <circle cx="18" cy="44" r="5" fill="#334155" stroke="#00f0ff" stroke-width="1.5"/>
-        <circle cx="18" cy="44" r="2" fill="#00f0ff"/>
-        <circle cx="46" cy="44" r="5" fill="#334155" stroke="#00f0ff" stroke-width="1.5"/>
-        <circle cx="46" cy="44" r="2" fill="#00f0ff"/>
+        <circle cx="18" cy="44" r="5" fill="#334155" stroke="#ef4444" stroke-width="1.5"/>
+        <circle cx="18" cy="44" r="2" fill="#ef4444"/>
+        <circle cx="46" cy="44" r="5" fill="#334155" stroke="#ef4444" stroke-width="1.5"/>
+        <circle cx="46" cy="44" r="2" fill="#ef4444"/>
       </svg>
     `;
 
@@ -373,7 +373,7 @@ export default function LiveMap({
         type: 'line',
         source: 'aegis-route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-width': 6, 'line-color': '#00f0ff', 'line-opacity': 0.85 },
+        paint: { 'line-width': 6, 'line-color': '#ef4444', 'line-opacity': 0.85 },
       });
 
       // Road closure markers source
@@ -1367,13 +1367,13 @@ export default function LiveMap({
 
       {/* HUD: MINIMAL CORNER OVERLAY */}
       <div className="absolute top-4 left-4 flex flex-col gap-2">
-        <div className="bg-black/80 backdrop-blur-xl p-3 rounded-lg border border-cyan-500/30 flex flex-col gap-1 min-w-[220px]">
+        <div className="bg-black/80 backdrop-blur-xl p-3 rounded-lg border border-red-500/30 flex flex-col gap-1 min-w-[220px]">
           <div className="flex items-center gap-2">
             <div
-              className={`w-2 h-2 rounded-full ${activeScenario?.isRedAlert ? 'bg-red-500 animate-pulse' : 'bg-cyan-400'
+              className={`w-2 h-2 rounded-full ${activeScenario?.isRedAlert ? 'bg-amber-500 animate-pulse' : 'bg-red-400'
                 }`}
             />
-            <span className="text-cyan-400 text-[10px] font-mono font-bold uppercase tracking-tighter">
+            <span className="text-red-400 text-[10px] font-mono font-bold uppercase tracking-tighter">
               {activeScenario?.title || 'SYSTEM IDLE'}
             </span>
           </div>
@@ -1402,7 +1402,7 @@ export default function LiveMap({
                   {MODE_ICON[organPlan.transport_mode] || '🚗'}
                 </span>
               )}
-              <span className="text-cyan-400 font-mono text-xs uppercase tracking-wider">
+              <span className="text-red-400 font-mono text-xs uppercase tracking-wider">
                 {organPlan?.transport_mode ?? 'Road'}
               </span>
               <span className="text-gray-500 font-mono text-[10px]">
@@ -1426,7 +1426,7 @@ export default function LiveMap({
           </button>
           <button
             onClick={() => setIsFollowing((v) => !v)}
-            className={`px-2 py-1 rounded border text-xs font-mono ${isFollowing ? 'border-cyan-400/50 text-cyan-300' : 'border-white/10 text-gray-400'}`}
+            className={`px-2 py-1 rounded border text-xs font-mono ${isFollowing ? 'border-red-400/50 text-red-300' : 'border-white/10 text-gray-400'}`}
           >
             {isFollowing ? 'FOLLOW' : 'FREE'}
           </button>
@@ -1445,28 +1445,28 @@ export default function LiveMap({
       {/* Bottom-left Dev panel */}
       <div className="absolute bottom-4 left-4 z-50 flex flex-col items-start gap-2">
         {showEtaPanel && (
-          <div className="bg-black/90 backdrop-blur-xl p-4 rounded-lg border border-cyan-500/30 min-w-[300px] flex flex-col gap-3 shadow-[0_0_30px_rgba(0,240,255,0.1)]">
+          <div className="bg-black/90 backdrop-blur-xl p-4 rounded-lg border border-red-500/30 min-w-[300px] flex flex-col gap-3 shadow-[0_0_30px_rgba(239,68,68,0.1)]">
             {/* Algorithm Comparison */}
             <div>
-              <div className="text-[10px] text-cyan-400 font-mono font-bold uppercase tracking-wider mb-2">Algorithm Comparison</div>
+              <div className="text-[10px] text-red-400 font-mono font-bold uppercase tracking-wider mb-2">Algorithm Comparison</div>
               {isFetchingStats ? (
                 <div className="text-[9px] text-gray-400 font-mono animate-pulse">Fetching both routes...</div>
               ) : (
                 <div className="grid grid-cols-3 gap-1 text-[9px] font-mono">
                   <div className="text-gray-500"></div>
-                  <div className="text-cyan-300 text-center">DIJKSTRA</div>
+                  <div className="text-red-300 text-center">DIJKSTRA</div>
                   <div className="text-purple-300 text-center">DUAN-MAO</div>
 
                   <div className="text-gray-500">EXEC</div>
-                  <div className="text-cyan-200 text-center">{algoStats.dijkstra ? `${algoStats.dijkstra.exec_ms.toFixed(0)}ms` : '—'}</div>
+                  <div className="text-red-200 text-center">{algoStats.dijkstra ? `${algoStats.dijkstra.exec_ms.toFixed(0)}ms` : '—'}</div>
                   <div className="text-purple-200 text-center">{algoStats.bmsssp ? `${algoStats.bmsssp.exec_ms.toFixed(0)}ms` : '—'}</div>
 
                   <div className="text-gray-500">ETA</div>
-                  <div className="text-cyan-200 text-center">{algoStats.dijkstra ? formatEta(algoStats.dijkstra.eta_s) : '—'}</div>
+                  <div className="text-red-200 text-center">{algoStats.dijkstra ? formatEta(algoStats.dijkstra.eta_s) : '—'}</div>
                   <div className="text-purple-200 text-center">{algoStats.bmsssp ? formatEta(algoStats.bmsssp.eta_s) : '—'}</div>
 
                   <div className="text-gray-500">DIST</div>
-                  <div className="text-cyan-200 text-center">{algoStats.dijkstra ? `${(algoStats.dijkstra.dist_m / 1000).toFixed(2)}km` : '—'}</div>
+                  <div className="text-red-200 text-center">{algoStats.dijkstra ? `${(algoStats.dijkstra.dist_m / 1000).toFixed(2)}km` : '—'}</div>
                   <div className="text-purple-200 text-center">{algoStats.bmsssp ? `${(algoStats.bmsssp.dist_m / 1000).toFixed(2)}km` : '—'}</div>
                 </div>
               )}
@@ -1477,15 +1477,15 @@ export default function LiveMap({
 
             {/* Tactical Injections */}
             <div>
-              <div className="text-[10px] text-cyan-500/60 font-mono font-bold uppercase tracking-wider mb-2">Tactical Injections</div>
+              <div className="text-[10px] text-red-500/60 font-mono font-bold uppercase tracking-wider mb-2">Tactical Injections</div>
               <div className="flex flex-col gap-1.5">
                 {Object.entries(SCENARIOS).map(([key, data]) => {
                   const isOrganTransport = key === 'ORGAN_TRANSPORT';
                   const btnClass = isOrganTransport
                     ? 'border-blue-400 text-blue-300 bg-blue-500/20 hover:bg-blue-500/40 hover:text-white hover:border-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.25)]'
                     : data.isRedAlert
-                      ? 'border-red-500/40 text-red-500 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_rgba(239,68,68,0.15)]'
-                      : 'border-cyan-500/40 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500 hover:text-white shadow-[0_0_15px_rgba(0,240,255,0.15)]';
+                      ? 'border-amber-500/40 text-amber-500 bg-amber-500/5 hover:bg-amber-500 hover:text-black hover:border-amber-400 shadow-[0_0_15px_rgba(234,179,8,0.3)]'
+                      : 'border-red-500/40 text-red-400 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_rgba(239,68,68,0.15)]';
                   return (
                     <button
                       key={key}
@@ -1535,8 +1535,8 @@ export default function LiveMap({
           }}
           className={
             showEtaPanel
-              ? 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-cyan-500/30 border-cyan-400/50 text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.2)]'
-              : 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-black/80 backdrop-blur-xl border-white/10 text-gray-400 hover:text-cyan-300 hover:border-cyan-500/30'
+              ? 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-red-500/30 border-red-400/50 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
+              : 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-black/80 backdrop-blur-xl border-white/10 text-gray-400 hover:text-red-300 hover:border-red-500/30'
           }
         >
           {showEtaPanel ? '✕ DEV' : '⚙ DEV'}

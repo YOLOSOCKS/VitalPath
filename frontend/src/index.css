@@ -17,35 +17,32 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00f0ff;
+  background: #ef4444;
 }
 
-/* RED ALERT — subtle red accent only (no full-screen haze) */
+/* CARGO ALERT — yellow accent (main theme is red) */
 body.red-alert {
   --tw-text-opacity: 1;
 }
 body.red-alert #root > div {
-  /* Keep normal dark background; red tint only on accents below */
   background: #050505 !important;
 }
 
-/* Force Cyan Text to turn Red */
-body.red-alert .text-cyan-400 {
-  color: #ef4444 !important;
-  /* Tailwind Red-500 */
-  text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+/* Force red accent text to yellow when cargo alert */
+body.red-alert .text-red-400,
+body.red-alert .text-red-300 {
+  color: #eab308 !important;
+  text-shadow: 0 0 10px rgba(234, 179, 8, 0.5);
 }
-
-/* Force Borders to turn Red */
-body.red-alert .border-cyan-500\/30,
+body.red-alert .border-red-500\/30,
+body.red-alert .border-red-500\/50,
 body.red-alert .border-white\/10 {
-  border-color: #ef4444 !important;
-  box-shadow: 0 0 15px rgba(239, 68, 68, 0.2) inset;
+  border-color: rgba(234, 179, 8, 0.5) !important;
+  box-shadow: 0 0 15px rgba(234, 179, 8, 0.2) inset;
 }
-
-/* Force Backgrounds to pulse Red */
-body.red-alert .bg-cyan-950\/30 {
-  background-color: rgba(69, 10, 10, 0.4) !important;
+body.red-alert .bg-red-950\/30,
+body.red-alert .bg-red-500\/20 {
+  background-color: rgba(120, 90, 0, 0.25) !important;
 }
 
 /* ====== WELCOME SCREEN ANIMATIONS ====== */
@@ -97,35 +94,79 @@ body.red-alert .bg-cyan-950\/30 {
   }
 }
 
-/* Scanline sweep across welcome screen */
+/* Subtle heartbeat / pulse overlay on welcome screen */
+.welcome-heartbeat {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.06;
+  background: radial-gradient(ellipse 80% 80% at 50% 50%, rgba(239, 68, 68, 0.15) 0%, transparent 55%);
+  animation: welcomeHeartbeat 2.2s ease-in-out infinite;
+}
+
+@keyframes welcomeHeartbeat {
+  0%, 100% {
+    opacity: 0.04;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.08;
+    transform: scale(1.02);
+  }
+}
+
+/* Scanline sweep with pulse — moves down while opacity/glow pulses */
 .welcome-scanline {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.4) 50%, transparent 100%);
-  animation: scanlineSweep 4s linear infinite;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.5) 50%, transparent 100%);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+  animation: scanlineSweep 4s linear infinite, scanlinePulse 0.8s ease-in-out infinite;
   z-index: 3;
   pointer-events: none;
 }
 
 @keyframes scanlineSweep {
   0% {
-    top: -2px;
-    opacity: 0;
+    top: -4px;
   }
-
-  10% {
-    opacity: 1;
-  }
-
-  90% {
-    opacity: 1;
-  }
-
   100% {
     top: 100%;
-    opacity: 0;
+  }
+}
+
+@keyframes scanlinePulse {
+  0%, 100% {
+    opacity: 0.35;
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.25);
+    transform: scaleY(0.7);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+    transform: scaleY(1.2);
+  }
+}
+
+/* Red theme scanline (welcome screen) */
+.welcome-scanline-red {
+  background: linear-gradient(90deg, transparent 0%, rgba(239, 68, 68, 0.55) 50%, transparent 100%);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.45);
+  animation: scanlineSweep 4s linear infinite, scanlinePulseRed 0.8s ease-in-out infinite;
+}
+@keyframes scanlinePulseRed {
+  0%, 100% {
+    opacity: 0.35;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+    transform: scaleY(0.7);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+    transform: scaleY(1.2);
   }
 }
