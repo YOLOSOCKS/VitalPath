@@ -70,7 +70,7 @@ export default function MissionStatusCard({
   }, [overlayOpen]);
 
   return (
-    <div className="absolute bottom-4 right-4 z-[2] flex flex-col items-end">
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[2] flex flex-col items-center">
       {/* Expandable overlay: backdrop + panel anchored above card */}
       {overlayOpen && (
         <>
@@ -82,10 +82,10 @@ export default function MissionStatusCard({
             aria-label="Close mission summary"
           />
           <div
-            className="absolute bottom-full right-0 z-[4] mb-2 w-[320px] max-h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-black/40 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-200 ease-out pointer-events-auto"
+            className="absolute bottom-full left-1/2 -translate-x-1/2 z-[4] mb-2 w-[320px] max-h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-black/40 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-200 ease-out pointer-events-auto"
             style={{
               opacity: entered ? 1 : 0,
-              transform: entered ? 'translateY(0)' : 'translateY(8px)',
+              transform: entered ? 'translate(-50%, 0)' : 'translate(-50%, 8px)',
             }}
             onClick={(e) => e.stopPropagation()}
           >

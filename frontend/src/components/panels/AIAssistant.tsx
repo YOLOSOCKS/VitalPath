@@ -18,6 +18,11 @@ interface ChatRequest {
   context?: string;
 }
 
+/** Delay per character for typing effect (ms). Configurable 50–100. */
+const TYPING_DELAY_MS = 60;
+/** TTS playback rate: < 1 = slower, clearer articulation. */
+const TTS_PLAYBACK_RATE = 0.88;
+
 // 1. Wrap in forwardRef to allow App.tsx to 'hold' this component
 const glassCardBase = 'bg-black/35 backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)] shadow-[0_4px_24px_rgba(0,0,0,0.28)] overflow-hidden';
 const glassCardInner = 'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]';
@@ -38,19 +43,22 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [typingMessageIndex, setTypingMessageIndex] = useState<number | null>(null);
+  const [typingDisplayedLength, setTypingDisplayedLength] = useState(0);
+  const lastSpokenMessageRef = useRef<number>(-1);
+  const skipNextTTSRef = useRef(false);
+  const prevMessagesLengthRef = useRef(0);
 
-  // 2. EXPOSE injectSystemMessage AND speak (for scenario TTS)
+  // 2. EXPOSE injectSystemMessage AND speak (for scenario TTS). Typing + TTS are started by the effect when the new message is added.
   useImperativeHandle(ref, () => ({
     injectSystemMessage: async (text: string, shouldSpeak = true) => {
+      skipNextTTSRef.current = !shouldSpeak;
       const aiMsg: Message = {
         role: 'ai',
         text: text,
         timestamp: new Date().toLocaleTimeString([], { hour12: false })
       };
       setMessages(prev => [...prev, aiMsg]);
-      if (isVoiceEnabled && shouldSpeak) {
-        await handleVoicePlay(text);
-      }
     },
     speak: async (text: string) => handleVoicePlay(text),
   }));
@@ -65,11 +73,75 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
     return () => mo.disconnect();
   }, []);
 
+  // When a new AI message is added (messages.length increased), start typing effect and TTS (synced)
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (messages.length === 0) return;
+    // First run (e.g. initial load): sync ref so we don't type the initial message
+    if (prevMessagesLengthRef.current === 0) {
+      prevMessagesLengthRef.current = messages.length;
+      return;
     }
+    const lastIdx = messages.length - 1;
+    const last = messages[lastIdx];
+    if (last.role !== 'ai') {
+      prevMessagesLengthRef.current = messages.length;
+      return;
+    }
+    const isNewMessage = messages.length > prevMessagesLengthRef.current;
+    prevMessagesLengthRef.current = messages.length;
+
+    if (typingMessageIndex === lastIdx) return;
+    if (typingMessageIndex !== null && typingMessageIndex < lastIdx) {
+      setTypingMessageIndex(lastIdx);
+      setTypingDisplayedLength(0);
+      if (isNewMessage && isVoiceEnabled && !skipNextTTSRef.current) {
+        lastSpokenMessageRef.current = lastIdx;
+        handleVoicePlay(last.text);
+      }
+      skipNextTTSRef.current = false;
+      return;
+    }
+    // Only run typing + TTS for newly added messages (not initial load)
+    if (!isNewMessage) return;
+    setTypingMessageIndex(lastIdx);
+    setTypingDisplayedLength(0);
+    if (isVoiceEnabled && !skipNextTTSRef.current) {
+      lastSpokenMessageRef.current = lastIdx;
+      handleVoicePlay(last.text);
+    }
+    skipNextTTSRef.current = false;
   }, [messages]);
+
+  // Typing interval: advance displayed length until full (do not depend on typingDisplayedLength to avoid resetting interval every tick)
+  useEffect(() => {
+    if (typingMessageIndex === null || typingMessageIndex >= messages.length) return;
+    const fullText = messages[typingMessageIndex].text;
+    if (fullText.length === 0) {
+      setTypingMessageIndex(null);
+      return;
+    }
+    const t = setInterval(() => {
+      setTypingDisplayedLength((prev) => {
+        const next = prev + 1;
+        if (next >= fullText.length) {
+          setTypingMessageIndex(null);
+          return fullText.length;
+        }
+        return next;
+      });
+    }, TYPING_DELAY_MS);
+    return () => clearInterval(t);
+  }, [typingMessageIndex, messages]);
+
+  // Scroll to keep latest content in view when messages or typing progress
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const targetScroll = el.scrollHeight - el.clientHeight;
+    if (targetScroll <= 0) return;
+    const centeredBottom = Math.max(0, el.scrollHeight - Math.floor(el.clientHeight * 0.6));
+    el.scrollTo({ top: centeredBottom, behavior: 'smooth' });
+  }, [messages, typingDisplayedLength]);
 
   // Clean up audio URLs to prevent memory leaks
   useEffect(() => {
@@ -106,7 +178,7 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
       audio.volume = 1.0;
-      audio.playbackRate = 1.1;
+      audio.playbackRate = TTS_PLAYBACK_RATE;
       // Play through Web Audio API for extra gain (louder)
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       if (ctx.state === 'suspended') await ctx.resume();
@@ -121,7 +193,7 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
       // Do NOT use static mp3. Fallback to browser speechSynthesis only when ElevenLabs fails.
       try {
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.0;
+        utterance.rate = 0.9;
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
         window.speechSynthesis.speak(utterance);
@@ -160,10 +232,7 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
       };
       
       setMessages(prev => [...prev, aiMsg]);
-
-      if (isVoiceEnabled) {
-        await handleVoicePlay(aiText);
-      }
+      // TTS starts from effect when new AI message is detected (synced with typing)
 
     } catch (err) {
       setMessages(prev => [...prev, { 
@@ -214,20 +283,27 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
       {open && (
       <>
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 font-mono text-xs scrollbar-thin scrollbar-thumb-red-900">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-            <div className={`max-w-[90%] p-2 rounded border ${
-              m.role === 'user' 
-                ? 'bg-red-950/30 border-red-500/50 text-red-100' 
-                : 'bg-black/50 border-white/20 text-gray-300'
-            }`}>
-              {m.text.split('\n').map((line, idx) => (
-                <p key={idx} className="mb-1 leading-relaxed">{line}</p>
-              ))}
+        {messages.map((m, i) => {
+          const isTyping = m.role === 'ai' && i === typingMessageIndex;
+          const displayText = isTyping ? m.text.slice(0, typingDisplayedLength) : m.text;
+          return (
+            <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+              <div className={`max-w-[90%] p-2 rounded border ${
+                m.role === 'user'
+                  ? 'bg-red-950/30 border-red-500/50 text-red-100'
+                  : 'bg-black/50 border-white/20 text-gray-300'
+              }`}>
+                {displayText.split('\n').map((line, idx) => (
+                  <p key={idx} className="mb-1 leading-relaxed">{line}</p>
+                ))}
+                {isTyping && typingDisplayedLength < m.text.length && (
+                  <span className="inline-block w-2 h-3 ml-0.5 bg-red-400 animate-pulse" aria-hidden />
+                )}
+              </div>
+              <span className="text-[9px] text-gray-600 mt-1">{m.timestamp}</span>
             </div>
-            <span className="text-[9px] text-gray-600 mt-1">{m.timestamp}</span>
-          </div>
-        ))}
+          );
+        })}
         {isLoading && <div className="text-red-400 animate-pulse font-mono text-[10px] uppercase">Analyzing cargo status...</div>}
       </div>
 

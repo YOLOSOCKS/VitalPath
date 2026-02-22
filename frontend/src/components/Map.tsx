@@ -202,7 +202,7 @@ export default function LiveMap({
   onScenarioClear,
 }: {
   activeScenario?: any;
-  organPlan?: { transport_mode?: string; eta_total_s?: number; risk_status?: string } | null;
+  organPlan?: { transport_mode?: string; eta_total_s?: number; risk_status?: string; donor_hospital?: string; recipient_hospital?: string } | null;
   onNavUpdate?: (nav: NavLive) => void;
   onScenarioInject?: (s: any) => void;
   onScenarioClear?: () => void;
@@ -248,6 +248,19 @@ export default function LiveMap({
   const roadblockStopIdx = useRef<number | null>(null); // route index where to stop
   // Pending reroute: stored here until ambulance reaches the roadblock, then applied
   const pendingRerouteRef = useRef<{ coords: [number, number][]; cumDist: number[]; cumTime: number[]; totalDist: number; totalTime: number; steps: NavStep[]; algorithm: string } | null>(null);
+
+  // Escape closes dev panel (same as Mission Status overlay)
+  useEffect(() => {
+    if (!showEtaPanel) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowEtaPanel(false);
+        setShowAlgoRace(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showEtaPanel]);
 
   // Apply a queued reroute: swap it into routeRef and unfreeze the ambulance
   const applyPendingReroute = () => {
@@ -1368,86 +1381,29 @@ export default function LiveMap({
       <div className="absolute inset-x-0 top-0 h-28 pointer-events-none z-[1] bg-gradient-to-b from-black/50 via-black/10 to-transparent rounded-t-2xl" aria-hidden />
       <div className="absolute inset-x-0 bottom-0 h-28 pointer-events-none z-[1] bg-gradient-to-t from-black/50 via-black/10 to-transparent rounded-b-2xl" aria-hidden />
 
-      {/* HUD: glass panels with theme borders and hierarchy */}
-      <div className="absolute top-4 left-4 flex flex-col gap-2 z-[2]">
-        <div className="map-hud-panel bg-black/40 backdrop-blur-xl p-3.5 rounded-xl border min-w-[220px] flex flex-col gap-1.5 border-white/10 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)]">
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-2 h-2 rounded-full shrink-0 ${activeScenario?.isRedAlert ? 'bg-amber-500 animate-pulse' : 'bg-red-400'}`}
-            />
-            <span className="text-red-400 font-mono text-[10px] font-bold uppercase tracking-tight">
-              {activeScenario?.title || 'SYSTEM IDLE'}
-            </span>
-          </div>
-          <div className="text-[9px] text-gray-500 font-mono">
-            SHIPMENT // {currentPos ? `${currentPos[0].toFixed(5)}, ${currentPos[1].toFixed(5)}` : '--, --'}
-          </div>
-          {routeRef.current?.totalDist != null && routeRef.current?.totalTime != null && (
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-[9px] text-gray-500 font-mono">ROUTE</span>
-              <span className="text-white font-mono text-xs font-semibold tabular-nums">{(routeRef.current.totalDist / 1000).toFixed(2)} km</span>
-              <span className="text-red-400 font-mono text-sm font-bold tabular-nums">{formatEta(routeRef.current.totalTime)}</span>
-            </div>
-          )}
-          {routeError && <div className="text-[10px] text-red-300 font-mono mt-1 max-w-[300px]">{routeError}</div>}
-        </div>
-      </div>
+      {/* Dev: backdrop (same as Mission Status) when panel open */}
+      {showEtaPanel && (
+        <button
+          type="button"
+          className="fixed inset-0 z-[44] bg-black/20 backdrop-blur-[2px] transition-opacity duration-200"
+          onClick={() => {
+            setShowEtaPanel(false);
+            setShowAlgoRace(false);
+          }}
+          aria-label="Close dev panel"
+        />
+      )}
 
-      {/* Transport mode + ETA + controls */}
-      <div className="absolute top-4 right-4 z-50">
-        <div className="map-hud-panel bg-black/40 backdrop-blur-xl p-3.5 rounded-xl border border-white/10 flex gap-3 items-center shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)]">
-          {!activeScenario ? (
-            <span className="text-gray-500 font-mono text-xs px-2">Select a scenario to start</span>
-          ) : (
-            <>
-              {organPlan?.transport_mode && (
-                <span className="text-lg" title={organPlan.transport_mode}>
-                  {MODE_ICON[organPlan.transport_mode] || '🚗'}
-                </span>
-              )}
-              <span className="text-red-400 font-mono text-xs uppercase tracking-wider">
-                {organPlan?.transport_mode ?? 'Road'}
-              </span>
-              <span className="text-white font-mono text-sm font-bold tabular-nums">
-                ETA {routeRef.current?.totalTime != null
-                  ? formatEta(routeRef.current.totalTime)
-                  : organPlan?.eta_total_s != null
-                    ? formatEta(organPlan.eta_total_s)
-                    : '--:--'}
-              </span>
-            </>
-          )}
-          <button
-            onClick={() => routeReady && startAnimation()}
-            disabled={isRouting || simRunning || !routeReady}
-            className={`px-3 py-1 rounded border text-xs font-mono ${isRouting || simRunning || !routeReady
-              ? 'bg-white/5 border-white/10 text-gray-400 cursor-not-allowed'
-              : 'bg-green-500/20 border-green-400/40 text-green-300 hover:bg-green-500/30 animate-pulse'
-              }`}
+      {/* Dev panel: stays centered at ~39%; button is moved in (left) */}
+      {showEtaPanel && (
+        <div
+          className="absolute bottom-4 left-[39%] -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none"
+          aria-hidden
+        >
+          <div
+            className="map-hud-panel bg-black/40 backdrop-blur-xl p-4 rounded-xl border border-white/10 min-w-[300px] flex flex-col gap-3 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] z-[45] pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
           >
-            {isRouting ? '...' : simRunning ? 'MOVING' : routeReady ? '▶ GO' : 'GO'}
-          </button>
-          <button
-            onClick={() => setIsFollowing((v) => !v)}
-            className={`px-2 py-1 rounded border text-xs font-mono ${isFollowing ? 'border-red-400/50 text-red-300' : 'border-white/10 text-gray-400'}`}
-          >
-            {isFollowing ? 'FOLLOW' : 'FREE'}
-          </button>
-          {(simRunning || isRouting) && (
-            <button
-              onClick={cancelRoute}
-              className="px-2 py-1 rounded border text-xs font-mono bg-red-500/20 border-red-400/40 text-red-300 hover:bg-red-500/30 transition-colors"
-              title="Cancel route"
-            >
-              ✕
-            </button>
-          )}        </div>
-      </div>
-
-      {/* Bottom-left Dev panel */}
-      <div className="absolute bottom-4 left-4 z-50 flex flex-col items-start gap-2">
-        {showEtaPanel && (
-          <div className="map-hud-panel bg-black/40 backdrop-blur-xl p-4 rounded-xl border border-white/10 min-w-[300px] flex flex-col gap-3 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)]">
             {/* Algorithm Comparison */}
             <div>
               <div className="text-[10px] text-red-400 font-mono font-bold uppercase tracking-wider mb-2">Algorithm Comparison</div>              {isFetchingStats ? (
@@ -1519,8 +1475,9 @@ export default function LiveMap({
               </div>
             )}
           </div>
-        )}
-
+        </div>
+      )}
+      <div className="absolute bottom-4 left-20 z-50">
         <button
           onClick={() => {
             const next = !showEtaPanel;
@@ -1533,13 +1490,12 @@ export default function LiveMap({
           }}
           className={
             showEtaPanel
-              ? 'map-hud-panel px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all duration-300 bg-red-500/20 border-red-500/40 text-red-300 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-15)]'
-              : 'map-hud-panel px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all duration-300 bg-black/40 backdrop-blur-xl border-white/10 text-gray-400 hover:text-red-300 hover:border-red-500/30'
+              ? 'map-hud-panel px-4 py-2.5 rounded-xl border text-sm font-mono font-bold transition-all duration-300 bg-red-500/20 border-red-500/40 text-red-300 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-15)]'
+              : 'map-hud-panel px-4 py-2.5 rounded-xl border text-sm font-mono font-bold transition-all duration-300 bg-black/40 backdrop-blur-xl border-white/10 text-gray-400 hover:text-red-300 hover:border-red-500/30'
           }
         >
           {showEtaPanel ? '✕ DEV' : '⚙ DEV'}
         </button>
-
       </div>
       {/* Algorithm Race Mini-Map (bottom-right) */}
       <AlgoRaceMiniMap data={algoRaceData} visible={showAlgoRace} />
