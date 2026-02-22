@@ -89,9 +89,19 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
       }
 
       const audioUrl = URL.createObjectURL(res.data);
-      audioRef.current = new Audio(audioUrl);
-      audioRef.current.playbackRate = 1.5;
-      await audioRef.current.play();
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      audio.volume = 1.0;
+      audio.playbackRate = 1.5;
+      // Play through Web Audio API for extra gain (louder)
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (ctx.state === 'suspended') await ctx.resume();
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 1.6;
+      const src = ctx.createMediaElementSource(audio);
+      src.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      await audio.play();
     } catch (err) {
       console.error("ElevenLabs Integration Error:", err);
       // Fallback to browser speechSynthesis only when ElevenLabs fails
@@ -99,6 +109,7 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = 1.5;
         utterance.pitch = 1.0;
+        utterance.volume = 1.0;
         window.speechSynthesis.speak(utterance);
         console.log("[TTS] Fallback: using speechSynthesis");
       } catch (fallbackErr) {

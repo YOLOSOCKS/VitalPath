@@ -124,28 +124,33 @@ function App() {
       setOrganPlan(null);
     }
 
-    // 1. Alert tone
+    // 1. Alert tone (mp3) — wait for it to finish before TTS and AI message
     const fileName = scenario.isRedAlert ? 'trauma.mp3' : 'routine.mp3';
     const audioPath = `/audio/${fileName}`;
-    const audio = new Audio(audioPath);
-    audio.volume = 1.0;
-    audio.play()
-      .then(() => setAudioError(false))
-      .catch(() => setAudioError(true));
+    const alertAudio = new Audio(audioPath);
+    alertAudio.volume = 1.0;
+    const mp3Finished = new Promise<void>((resolve, reject) => {
+      alertAudio.addEventListener('ended', () => resolve());
+      alertAudio.addEventListener('error', (e) => reject(e));
+    });
+    alertAudio.play().then(() => setAudioError(false)).catch(() => setAudioError(true));
 
-    // 1. SPEAK via ElevenLabs TTS (dynamic, no static mp3)
     const phrase = scenario.spokenPhrase ?? scenario.aiPrompt;
-    if (aiRef.current?.speak) {
-      aiRef.current.speak(phrase).catch((e: any) => {
-        console.error('Voice playback failed:', e);
-        setAudioError(true);
-      });
-    }
+    const doTtsAndInject = () => {
+      if (aiRef.current?.speak) {
+        aiRef.current.speak(phrase).catch((e: any) => {
+          console.error('Voice playback failed:', e);
+          setAudioError(true);
+        });
+      }
+      if (aiRef.current) {
+        aiRef.current.injectSystemMessage(scenario.aiPrompt, false);
+      }
+    };
 
-    // 2. INJECT MESSAGE INTO AI BRAIN (chat display only, no duplicate speech)
-    if (aiRef.current) {
-      aiRef.current.injectSystemMessage(scenario.aiPrompt, false);
-    }
+    mp3Finished
+      .then(() => doTtsAndInject())
+      .catch(() => doTtsAndInject());
   };
 
   const handleScenarioClear = () => {
@@ -155,7 +160,7 @@ function App() {
   };
 
   return (
-    <div className={`w-screen h-screen overflow-hidden flex flex-col transition-all duration-700 ${isRedAlert ? 'bg-red-950/50' : 'bg-[#050505]'}`}>
+    <div className={`w-screen h-screen overflow-hidden flex flex-col transition-all duration-700 ${isRedAlert ? 'bg-[#050505]' : 'bg-[#050505]'}`}>
 
       {showWelcome && <WelcomeScreen onComplete={() => setShowWelcome(false)} />}
 

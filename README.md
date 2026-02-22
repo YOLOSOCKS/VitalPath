@@ -313,7 +313,7 @@ cd backend
 cp .env.example .env
 ```
 
-Optional keys:
+Optional keys (Cargo Guardian chat needs `GEMINI_API_KEY`; get one at https://aistudio.google.com/apikey):
 ```env
 GEMINI_API_KEY=...
 ELEVENLABS_API_KEY=...

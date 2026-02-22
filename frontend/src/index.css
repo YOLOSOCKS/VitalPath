@@ -20,13 +20,13 @@
   background: #00f0ff;
 }
 
-/* RED ALERT OVERRIDES */
+/* RED ALERT — subtle red accent only (no full-screen haze) */
 body.red-alert {
   --tw-text-opacity: 1;
-  background: rgba(69, 10, 10, 0.35) !important;
 }
 body.red-alert #root > div {
-  background: rgba(69, 10, 10, 0.4) !important;
+  /* Keep normal dark background; red tint only on accents below */
+  background: #050505 !important;
 }
 
 /* Force Cyan Text to turn Red */

@@ -6,6 +6,7 @@ from app.services.gemini import (
     get_ai_response,
     get_cargo_integrity_response,
     get_risk_evaluate_response,
+    get_gemini_status,
     ChatRequest,
     CargoIntegrityRequest,
     RiskEvaluateRequest,
@@ -44,9 +45,27 @@ app.add_middleware(
 app.include_router(algo_router.router, prefix="/api/algo", tags=["algorithm"])
 app.include_router(vitalpath_router.router, prefix="/api/vitalpath", tags=["vitalpath"])
 
+
+@app.on_event("startup")
+def startup_gemini_log():
+    s = get_gemini_status()
+    if s["gemini_configured"]:
+        print(f"[VitalPath] Gemini: configured (key length {s['key_length']}, model {s['model']})")
+    else:
+        print(f"[VitalPath] Gemini: NO KEY — Cargo Guardian needs GEMINI_API_KEY.")
+        print(f"  Option A — Set in terminal before starting (no file):  set GEMINI_API_KEY=your_key")
+        print(f"  Option B — Create file {s['env_path']} with line:  GEMINI_API_KEY=your_key")
+        print(f"  Get a key at https://aistudio.google.com/apikey")
+
+
 @app.get("/")
 def read_root():
     return {"system": "VitalPath AI", "status": "operational", "ai_link": "active"}
+
+@app.get("/api/ai/status")
+def ai_status():
+    """Check if Gemini key is loaded (for debugging). No key value is exposed."""
+    return get_gemini_status()
 
 @app.post("/api/ai/chat")
 async def chat_endpoint(req: ChatRequest):
