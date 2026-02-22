@@ -61,39 +61,10 @@ export default function FloatingModule({
       }}
       aria-label={title}
     >
-      <div className="shrink-0 h-10 px-3 flex items-center justify-between border-b border-white/10 bg-black/30">
+      <div className="shrink-0 h-10 px-3 flex items-center border-b border-white/10 bg-black/30">
         <span className="text-red-400 font-mono text-[10px] font-bold uppercase tracking-widest truncate">
           {title}
         </span>
-        <div className="flex items-center gap-0.5">
-          <button
-            type="button"
-            onClick={onCollapseToggle}
-            className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-            aria-label={collapsed ? 'Expand' : 'Collapse'}
-            title={collapsed ? 'Expand' : 'Collapse'}
-          >
-            {collapsed ? '▸' : '▾'}
-          </button>
-          <button
-            type="button"
-            onClick={onMinimize}
-            className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-            aria-label="Minimize"
-            title="Minimize"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded text-gray-400 hover:text-red-400 hover:bg-white/10 transition-colors"
-            aria-label="Close"
-            title="Close"
-          >
-            ✕
-          </button>
-        </div>
       </div>
       {!collapsed && (
         <div className="flex-1 min-h-0 overflow-y-auto">

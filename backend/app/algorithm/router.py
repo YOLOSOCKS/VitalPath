@@ -290,23 +290,39 @@ def find_duan_mao_pivots(G: nx.MultiDiGraph, path_nodes: List[int], k: int = 2) 
     return pivots
 
 
-def _remove_blocked_edges(G: nx.MultiDiGraph, blocked_points: List[List[float]], radius_m: float = 200.0) -> nx.MultiDiGraph:
+def _remove_blocked_edges(G: nx.MultiDiGraph, blocked_points: List[List[float]], radius_m: float = 100.0) -> nx.MultiDiGraph:
     """Return a copy of G with edges near blocked_points removed.
-    Checks both endpoints AND midpoint of each edge against every blocked point."""
-    G2 = G.copy()
+    Only considers edges that touch nodes within radius of a block (faster than scanning all edges)."""
+    if not blocked_points:
+        return G
+    # 1) Nodes within radius of any blocked point (candidate edges touch these)
+    bp_tuples = [(blng, blat) for blat, blng in blocked_points]  # (lng, lat) for haversine
+    nearby_nodes = set()
+    for node, data in G.nodes(data=True):
+        x, y = data.get("x"), data.get("y")
+        if x is None or y is None:
+            continue
+        pt = (float(x), float(y))
+        for bp in bp_tuples:
+            if _haversine_m(bp, pt) < radius_m:
+                nearby_nodes.add(node)
+                break
+    # 2) Only check edges incident to those nodes (avoids haversine on most of the graph)
     edges_to_remove = set()
-    for blat, blng in blocked_points:
-        bp = (blng, blat)  # haversine expects (lng, lat)
-        for u, v, k, data in G2.edges(keys=True, data=True):
-            u_lng, u_lat = G2.nodes[u]["x"], G2.nodes[u]["y"]
-            v_lng, v_lat = G2.nodes[v]["x"], G2.nodes[v]["y"]
-            mid_lng = (u_lng + v_lng) / 2.0
-            mid_lat = (u_lat + v_lat) / 2.0
-            # Check all three points: start, midpoint, end of edge
+    for u, v, k in list(G.edges(keys=True)):
+        if u not in nearby_nodes and v not in nearby_nodes:
+            continue
+        u_lng, u_lat = G.nodes[u]["x"], G.nodes[u]["y"]
+        v_lng, v_lat = G.nodes[v]["x"], G.nodes[v]["y"]
+        mid_lng = (u_lng + v_lng) / 2.0
+        mid_lat = (u_lat + v_lat) / 2.0
+        for bp in bp_tuples:
             if (_haversine_m(bp, (u_lng, u_lat)) < radius_m or
                 _haversine_m(bp, (mid_lng, mid_lat)) < radius_m or
                 _haversine_m(bp, (v_lng, v_lat)) < radius_m):
                 edges_to_remove.add((u, v, k))
+                break
+    G2 = G.copy()
     for u, v, k in edges_to_remove:
         if G2.has_edge(u, v, k):
             G2.remove_edge(u, v, k)

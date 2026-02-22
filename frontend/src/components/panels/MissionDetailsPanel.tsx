@@ -64,16 +64,38 @@ function formatMinutes(seconds: number): string {
   return m <= 60 ? `${m} min` : `${(m / 60).toFixed(1)} h`;
 }
 
+/** Live risk from GET /api/vitalpath/risk */
+export interface LiveRisk {
+  overall: string;
+  score: number;
+  factors?: Array<{ name: string; severity: string; description: string; value?: number }>;
+  recommendation?: string;
+}
+
+/** Live alert from GET /api/vitalpath/alerts */
+export interface LiveAlert {
+  id: string;
+  scenario: string;
+  severity: string;
+  title: string;
+  message: string;
+  suggested_action?: string;
+}
+
 export default function MissionDetailsPanel({
   className,
   plan,
   tripProgressPercent,
+  liveRisk,
+  liveAlerts,
   isOpen: controlledOpen,
   onToggle: controlledToggle,
 }: {
   className?: string;
   plan: OrganPlanSummary | null;
   tripProgressPercent?: number;
+  liveRisk?: LiveRisk | null;
+  liveAlerts?: LiveAlert[] | null;
   isOpen?: boolean;
   onToggle?: () => void;
 }) {
@@ -203,7 +225,7 @@ export default function MissionDetailsPanel({
         </div>
       )}
 
-      {/* Alerts */}
+      {/* Alerts (from plan) */}
       {plan.alerts && plan.alerts.length > 0 && (
         <div className="space-y-2">
           {plan.alerts.slice(0, 2).map((a, i) => (
@@ -215,6 +237,37 @@ export default function MissionDetailsPanel({
               {a.suggested_action && (
                 <span className="block mt-0.5 text-amber-300/80">{a.suggested_action}</span>
               )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Live risk (backend-driven, same elapsed_s as telemetry) */}
+      {liveRisk && (
+        <div className="pt-3 border-t border-white/10 space-y-1">
+          <div className="text-[9px] text-gray-500 font-mono uppercase">Live risk</div>
+          <div className={`px-2 py-1.5 rounded border text-[10px] font-mono font-bold uppercase ${RISK_COLORS[liveRisk.overall as RiskStatus] || RISK_COLORS.low}`}>
+            {liveRisk.overall} {typeof liveRisk.score === 'number' && `(${Math.round(liveRisk.score)})`}
+          </div>
+          {liveRisk.recommendation && (
+            <div className="text-[10px] text-gray-400 font-mono">{liveRisk.recommendation}</div>
+          )}
+        </div>
+      )}
+
+      {/* Live alerts (backend-driven) */}
+      {liveAlerts && liveAlerts.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-[9px] text-gray-500 font-mono uppercase">Live alerts</div>
+          {liveAlerts.slice(0, 3).map((a) => (
+            <div
+              key={a.id}
+              className={`px-2 py-1.5 rounded border text-[10px] font-mono ${
+                a.severity === 'critical' ? 'border-red-500/40 bg-red-950/30 text-red-200' : 'border-amber-500/40 bg-amber-950/30 text-amber-200'
+              }`}
+            >
+              <span className="font-bold">{a.title}</span>
+              {a.suggested_action && <span className="block mt-0.5 opacity-90">{a.suggested_action}</span>}
             </div>
           ))}
         </div>

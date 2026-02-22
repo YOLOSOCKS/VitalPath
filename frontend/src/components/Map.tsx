@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import axios from 'axios';
@@ -16,6 +16,9 @@ export type NavLive = {
   total_distance_m?: number;
   total_time_s?: number;
   sim_speedup: number;
+  /** Multi-leg trip: current leg 1-based (e.g. 1 or 2), total legs */
+  trip_leg?: number;
+  trip_legs?: number;
 };
 
 type NavStep = {
@@ -145,9 +148,11 @@ const ORGAN_TRANSPORT_PHRASE = "Unit 22, organ transport protocol initiated. Pri
 const BLOOD_RUN_PHRASE = "Blood run confirmed. Standard medical logistics route active. Estimated arrival on schedule.";
 const CARGO_ALERT_PHRASE = "Cargo alert. Vital organ integrity compromised. AI assistant rerouting. Priority escalation in progress.";
 
+// Scenarios define mission context (scenario_type, metadata, start/stop) only. Telemetry/risk/alerts come from backend.
 const SCENARIOS: Record<string, any> = {
   ORGAN_TRANSPORT: {
     title: 'ORGAN TRANSPORT // COLD-CHAIN ACTIVE',
+    scenario_type: 'ORGAN',
     spokenPhrase: ORGAN_TRANSPORT_PHRASE,
     isRedAlert: false,
     start: DEFAULT_CENTER,
@@ -157,11 +162,11 @@ const SCENARIOS: Record<string, any> = {
     recipient_hospital: 'howard university hospital',
     organ_type: 'liver',
     aiPrompt: 'Life-critical organ shipment en route. Cold-chain 2–8°C monitored. Lid sealed, battery nominal. Recommend continuous monitoring; ETA within safe window.',
-    cargoTelemetry: { temperature_c: 4.2, shock_g: 0.1, lid_closed: true, battery_percent: 92, elapsed_time_s: 0 },
     patientOnBoard: true,
   },
   BLOOD_RUN: {
     title: 'BLOOD PRODUCTS // ROUTINE',
+    scenario_type: 'ROUTINE',
     spokenPhrase: BLOOD_RUN_PHRASE,
     isRedAlert: false,
     start: DEFAULT_CENTER,
@@ -172,11 +177,11 @@ const SCENARIOS: Record<string, any> = {
     recipient_hospital: 'georgetown university hospital',
     organ_type: 'default',
     aiPrompt: 'Routine blood run. Standard medical logistics. Maintain cold chain.',
-    cargoTelemetry: { temperature_c: 3.8, shock_g: 0.3, lid_closed: true, battery_percent: 88, elapsed_time_s: 0 },
     patientOnBoard: false,
   },
   CARGO_ALERT: {
     title: 'CARGO ALERT // SEAL / TEMP RISK',
+    scenario_type: 'LID_BREACH',
     spokenPhrase: CARGO_ALERT_PHRASE,
     isRedAlert: true,
     start: DEFAULT_CENTER,
@@ -186,7 +191,6 @@ const SCENARIOS: Record<string, any> = {
     recipient_hospital: 'howard university hospital',
     organ_type: 'heart',
     aiPrompt: 'CRITICAL: Container seal compromised or temperature drift detected. Assess viability; consider backup transport or expedited handoff. Do not open lid until receiving facility ready.',
-    cargoTelemetry: { temperature_c: 7.1, shock_g: 1.2, lid_closed: false, battery_percent: 45, elapsed_time_s: 0 },
     patientOnBoard: true,
   },
 };
@@ -194,15 +198,9 @@ const SCENARIOS: Record<string, any> = {
 // Transport mode display (from organ plan — no address input)
 const MODE_ICON: Record<string, string> = { road: '🚗', air: '✈️', hybrid: '🔀' };
 
-export default function LiveMap({
-  activeScenario,
-  organPlan,
-  onNavUpdate,
-  onScenarioInject,
-  onScenarioClear,
-  showEtaPanel: showEtaPanelProp,
-  onEtaPanelChange,
-}: {
+export type LiveMapHandle = { injectRoadblock: () => void };
+
+type LiveMapProps = {
   activeScenario?: any;
   organPlan?: { transport_mode?: string; eta_total_s?: number; risk_status?: string; donor_hospital?: string; recipient_hospital?: string } | null;
   onNavUpdate?: (nav: NavLive) => void;
@@ -210,7 +208,31 @@ export default function LiveMap({
   onScenarioClear?: () => void;
   showEtaPanel?: boolean;
   onEtaPanelChange?: (open: boolean) => void;
-}) {
+  /** Called when vehicle is stuck at roadblock for too long (true) or when reroute is applied (false) */
+  onVehicleStuck?: (stuck: boolean) => void;
+  /** When true, simulation is paused (ride stopped for assist / alert) */
+  simPaused?: boolean;
+  /** Called when reroute request starts (roadblock detour) */
+  onRerouteStart?: () => void;
+  /** Called when reroute is applied and vehicle resumes */
+  onRerouteComplete?: () => void;
+};
+
+const STUCK_THRESHOLD_MS = 15000;
+
+const LiveMap = forwardRef<LiveMapHandle, LiveMapProps>(function LiveMap({
+  activeScenario,
+  organPlan,
+  onNavUpdate,
+  onScenarioInject,
+  onScenarioClear,
+  showEtaPanel: showEtaPanelProp,
+  onEtaPanelChange,
+  onVehicleStuck,
+  simPaused = false,
+  onRerouteStart,
+  onRerouteComplete,
+}, ref) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const ambulanceMarker = useRef<maplibregl.Marker | null>(null);
@@ -247,6 +269,7 @@ export default function LiveMap({
   const algoRaceReqIdRef = useRef(0);
   // Dynamic Roadblock Injection
   const [activeRoadblocks, setActiveRoadblocks] = useState<[number, number][]>([]);
+  const [isRerouting, setIsRerouting] = useState(false);
   const roadblocksRef = useRef<[number, number][]>([]);
   const rerouteIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Hard-freeze flag: when true, ambulance does NOT advance past stop index
@@ -254,6 +277,20 @@ export default function LiveMap({
   const roadblockStopIdx = useRef<number | null>(null); // route index where to stop
   // Pending reroute: stored here until ambulance reaches the roadblock, then applied
   const pendingRerouteRef = useRef<{ coords: [number, number][]; cumDist: number[]; cumTime: number[]; totalDist: number; totalTime: number; steps: NavStep[]; algorithm: string } | null>(null);
+  const freezeStartRef = useRef<number | null>(null);
+  const stuckReportedRef = useRef(false);
+  const onVehicleStuckRef = useRef(onVehicleStuck);
+  onVehicleStuckRef.current = onVehicleStuck;
+  const simPausedRef = useRef(simPaused);
+  simPausedRef.current = simPaused;
+  const onRerouteStartRef = useRef(onRerouteStart);
+  onRerouteStartRef.current = onRerouteStart;
+  const onRerouteCompleteRef = useRef(onRerouteComplete);
+  onRerouteCompleteRef.current = onRerouteComplete;
+
+  useEffect(() => {
+    simPausedRef.current = simPaused;
+  }, [simPaused]);
 
   // When dev panel opens (from nav or in-map), fetch algo stats once; when it closes, hide algo race
   const prevShowEtaPanelRef = useRef(false);
@@ -285,6 +322,10 @@ export default function LiveMap({
     pendingRerouteRef.current = null;
     stoppedAtRoadblock.current = false;
     roadblockStopIdx.current = null;
+    freezeStartRef.current = null;
+    stuckReportedRef.current = false;
+    onVehicleStuckRef.current?.(false);
+    onRerouteCompleteRef.current?.();
     // Update the route line on the map
     const src = map.current?.getSource('vitalpath-route') as any;
     if (src) {
@@ -681,6 +722,12 @@ export default function LiveMap({
         0,
         simSpeedup
       );
+      const scInit = scenarioRef.current;
+      const numWp = scInit?.waypoints?.length ?? 0;
+      if (numWp > 0) {
+        initialNav.trip_legs = numWp + 1;
+        initialNav.trip_leg = activeWaypointIdxRef.current < 0 ? numWp + 1 : activeWaypointIdxRef.current + 1;
+      }
       onNavUpdateRef.current?.(initialNav);
 
       // If autoStart (e.g. dispatch scenario), begin animation immediately
@@ -906,10 +953,15 @@ export default function LiveMap({
     if (bgRerouteRef.current) bgRerouteRef.current.abort();
     const controller = new AbortController();
     bgRerouteRef.current = controller;
+    setIsRerouting(true);
+    onRerouteStartRef.current?.();
 
     try {
       const cur = ambulanceMarker.current?.getLngLat();
-      if (!cur) return;
+      if (!cur) {
+        setIsRerouting(false);
+        return;
+      }
       const start = { lat: cur.lat, lng: cur.lng };
 
       const requestBody: any = {
@@ -929,7 +981,10 @@ export default function LiveMap({
       const totalTime = Number(res.data?.total_time_s ?? 0);
       const steps = (res.data?.steps || []) as NavStep[];
 
-      if (!coords.length || !cumDist.length || !cumTime.length) return;
+      if (!coords.length || !cumDist.length || !cumTime.length) {
+        setIsRerouting(false);
+        return;
+      }
 
       // --- SMOOTH TRANSITION: Backtracking Logic ---
       // If the backend snaps the new start to a different road (e.g. previous intersection),
@@ -1054,6 +1109,8 @@ export default function LiveMap({
     } catch (e: any) {
       if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') return;
       console.warn('Background reroute failed (ambulance continues on current route)', e?.message);
+    } finally {
+      setIsRerouting(false);
     }
   };
 
@@ -1113,6 +1170,8 @@ export default function LiveMap({
       return updated;
     });
   };
+
+  useImperativeHandle(ref, () => ({ injectRoadblock }), [activeScenario, endPoint]);
 
   const handleGeocode = async () => {
     if (!destQuery.trim()) return;
@@ -1205,6 +1264,10 @@ export default function LiveMap({
 
     const SIM_SPEEDUP = 8; // demo speed multiplier: increases how fast the vehicle progresses along the real route timebase
     const tick = () => {
+      if (simPausedRef.current) {
+        animRef.current = requestAnimationFrame(tick);
+        return;
+      }
       const m = routeRef.current;
       if (!m || !ambulanceMarker.current || !map.current) return;
 
@@ -1230,6 +1293,12 @@ export default function LiveMap({
           totalTime,
           SIM_SPEEDUP
         );
+        const scFinal = scenarioRef.current;
+        const numWpFinal = scFinal?.waypoints?.length ?? 0;
+        if (numWpFinal > 0) {
+          finalNav.trip_legs = numWpFinal + 1;
+          finalNav.trip_leg = activeWaypointIdxRef.current < 0 ? numWpFinal + 1 : activeWaypointIdxRef.current + 1;
+        }
         onNavUpdateRef.current?.(finalNav);
 
         // Check for waypoints logic
@@ -1293,8 +1362,14 @@ export default function LiveMap({
             }
           } else {
             // Freeze the sim clock at this point so it resumes correctly after reroute
+            if (freezeStartRef.current == null) freezeStartRef.current = performance.now();
             const stopTime = m.cumTime[stopI] || 0;
             startTimeRef.current = performance.now() - (stopTime / SIM_SPEEDUP) * 1000;
+            // If stuck too long with no reroute, notify so AI can announce backup transport
+            if (!stuckReportedRef.current && freezeStartRef.current != null && (performance.now() - freezeStartRef.current) >= STUCK_THRESHOLD_MS) {
+              stuckReportedRef.current = true;
+              onVehicleStuckRef.current?.(true);
+            }
           }
           animRef.current = requestAnimationFrame(tick);
           return;
@@ -1303,6 +1378,7 @@ export default function LiveMap({
 
       ambulanceMarker.current.setLngLat(pos);
       setCurrentPos(pos);
+      freezeStartRef.current = null; // not frozen, so reset so next roadblock gets a fresh 15s
 
       // Trim the route line: only show the path A of the vehicle
       const remainingCoords: [number, number][] = [pos, ...m.coords.slice(i)];
@@ -1329,6 +1405,12 @@ export default function LiveMap({
         simTimeS,
         SIM_SPEEDUP
       );
+      const sc = scenarioRef.current;
+      const numWaypoints = sc?.waypoints?.length ?? 0;
+      if (numWaypoints > 0) {
+        nav.trip_legs = numWaypoints + 1;
+        nav.trip_leg = activeWaypointIdxRef.current < 0 ? numWaypoints + 1 : activeWaypointIdxRef.current + 1;
+      }
       onNavUpdateRef.current?.(nav);
 
       const rawBrg = bearingDeg(a, b);
@@ -1394,6 +1476,14 @@ export default function LiveMap({
       {/* Soft top/bottom gradients for depth */}
       <div className="absolute inset-x-0 top-0 h-28 pointer-events-none z-[1] bg-gradient-to-b from-black/50 via-black/10 to-transparent rounded-t-2xl" aria-hidden />
       <div className="absolute inset-x-0 bottom-0 h-28 pointer-events-none z-[1] bg-gradient-to-t from-black/50 via-black/10 to-transparent rounded-b-2xl" aria-hidden />
+
+      {/* Rerouting indicator (roadblock detour in progress) */}
+      {isRerouting && (
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[2] pointer-events-none flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black/60 backdrop-blur-sm border border-orange-500/40 text-orange-300 font-mono text-sm font-bold uppercase tracking-wider shadow-lg">
+          <span className="inline-block w-2 h-2 rounded-full bg-orange-400 animate-pulse" aria-hidden />
+          Rerouting…
+        </div>
+      )}
 
       {/* Dev: backdrop (same as Mission Status) when panel open */}
       {showEtaPanel && (
@@ -1472,49 +1562,14 @@ export default function LiveMap({
 
             {/* Divider */}
             <div className="border-t border-white/10" />
-
-            {/* Dynamic Roadblock Injection */}
-            {simRunning && (
-              <div>
-                <div className="text-[10px] text-orange-400/60 font-mono font-bold uppercase tracking-wider mb-2">Road Disruption</div>
-                <button
-                  onClick={injectRoadblock}
-                  className="w-full text-left px-3 py-2 text-[10px] font-mono font-bold rounded-lg border transition-all duration-300 hover:scale-[1.02] active:scale-95 border-orange-500/40 text-orange-400 bg-orange-500/5 hover:bg-orange-500 hover:text-white shadow-[0_0_15px_rgba(249,115,22,0.15)]"
-                >
-                  🚧 INJECT ROADBLOCK
-                </button>
-                {activeRoadblocks.length > 0 && (
-                  <div className="text-[8px] text-orange-300/50 font-mono mt-1">{activeRoadblocks.length} active roadblock{activeRoadblocks.length > 1 ? 's' : ''}</div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}
 
-      {/* Dev button (panel stays at left-[39%] when open) */}
-      <div className="absolute bottom-4 left-20 z-50">
-        <button
-          onClick={() => {
-            const next = !showEtaPanel;
-            setShowEtaPanel(next);
-            if (next) {
-              fetchBothAlgoStats();
-            } else {
-              setShowAlgoRace(false);
-            }
-          }}
-          className={
-            showEtaPanel
-              ? 'map-hud-panel px-4 py-2.5 rounded-xl border text-sm font-mono font-bold transition-all duration-300 bg-red-500/20 border-red-500/40 text-red-300 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-15)]'
-              : 'map-hud-panel px-4 py-2.5 rounded-xl border text-sm font-mono font-bold transition-all duration-300 bg-black/40 backdrop-blur-xl border-white/10 text-gray-400 hover:text-red-300 hover:border-red-500/30'
-          }
-        >
-          {showEtaPanel ? '✕ DEV' : '⚙ DEV'}
-        </button>
-      </div>
       {/* Algorithm Race Mini-Map (bottom-right) */}
       <AlgoRaceMiniMap data={algoRaceData} visible={showAlgoRace} />
     </div>
   );
-}
+});
+
+export default LiveMap;

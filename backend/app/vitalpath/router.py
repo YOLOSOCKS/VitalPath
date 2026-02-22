@@ -34,19 +34,28 @@ class AlertsResponse(BaseModel):
     alerts: List[Alert]
 
 
+def _parse_active_events(events_param: Optional[str]) -> List[str]:
+    """Parse comma-separated active_events query param."""
+    if not events_param or not events_param.strip():
+        return []
+    return [e.strip() for e in events_param.split(",") if e.strip()]
+
+
 @router.get("/telemetry", response_model=TelemetryResponse)
 async def get_telemetry(
     elapsed_s: float = Query(..., description="Elapsed time since mission start (seconds)"),
     mission_id: Optional[str] = Query(None),
     scenario_type: str = Query("ROUTINE", description="ROUTINE / ORGAN / CRITICAL / LID_BREACH etc."),
     seed: Optional[int] = Query(None),
+    active_events: Optional[str] = Query(None, description="Comma-separated injected events: COOLING_FAILURE, BATTERY_DROP, ROUGH_TERRAIN, LID_BREACH, ROAD_CLOSURE, COMMUNICATION_LOSS"),
 ):
-    """Simulate telemetry at given elapsed time for cargo (temperature, shock, lid, battery)."""
+    """Simulate telemetry at given elapsed time for cargo (temperature, shock, lid, battery). Injected events modify output."""
     telemetry = simulate_telemetry(
         elapsed_time_s=elapsed_s,
         mission_id=mission_id,
         scenario_type=scenario_type,
         seed=seed,
+        active_events=_parse_active_events(active_events),
     )
     return TelemetryResponse(mission_id=mission_id, telemetry=telemetry)
 
@@ -58,9 +67,12 @@ async def get_risk(
     max_safe_elapsed_s: Optional[float] = Query(None, description="Cold-chain safe window in seconds"),
     scenario_type: str = Query("ROUTINE"),
     seed: Optional[int] = Query(None),
+    active_events: Optional[str] = Query(None, description="Comma-separated injected scenario events"),
 ):
     """Real-time risk evaluation from simulated telemetry and optional ETA/window."""
-    telemetry = simulate_telemetry(elapsed_s, scenario_type=scenario_type, seed=seed)
+    telemetry = simulate_telemetry(
+        elapsed_s, scenario_type=scenario_type, seed=seed, active_events=_parse_active_events(active_events)
+    )
     evaluation = evaluate_risk(
         telemetry=telemetry,
         eta_remaining_s=eta_remaining_s,
@@ -100,9 +112,12 @@ async def get_alerts(
     eta_remaining_s: Optional[float] = Query(None),
     max_safe_elapsed_s: Optional[float] = Query(None),
     seed: Optional[int] = Query(None),
+    active_events: Optional[str] = Query(None, description="Comma-separated injected scenario events"),
 ):
     """Scenario-driven alerts from current simulated telemetry and time window."""
-    telemetry = simulate_telemetry(elapsed_s, scenario_type=scenario_type, seed=seed)
+    telemetry = simulate_telemetry(
+        elapsed_s, scenario_type=scenario_type, seed=seed, active_events=_parse_active_events(active_events)
+    )
     alerts = evaluate_alerts(
         telemetry=telemetry,
         scenario_type=scenario_type,
@@ -110,6 +125,22 @@ async def get_alerts(
         max_safe_elapsed_s=max_safe_elapsed_s,
     )
     return AlertsResponse(alerts=alerts)
+
+
+# --- Scenario event injection (mid-mission disruptions) ---
+class ScenarioEventRequest(BaseModel):
+    scenario_type: str = "ROUTINE"
+    elapsed_s: float = 0.0
+    event_type: str  # e.g. COOLING_FAILURE, BATTERY_DROP, ROUGH_TERRAIN, LID_BREACH, ROAD_CLOSURE, COMMUNICATION_LOSS
+
+
+@router.post("/scenario/event", response_model=dict)
+async def post_scenario_event(req: ScenarioEventRequest) -> dict:
+    """
+    Record a scenario event injection (for logging/future use).
+    Telemetry/risk/alerts are driven by frontend sending active_events on GET requests.
+    """
+    return {"ok": True, "event_type": req.event_type, "elapsed_s": req.elapsed_s, "scenario_type": req.scenario_type}
 
 
 # --- Organ transport planning ---

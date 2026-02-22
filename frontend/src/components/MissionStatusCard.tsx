@@ -23,6 +23,8 @@ export interface MissionStatusCardProps {
   isRedAlert: boolean;
   etaRemainingS?: number | null;
   tripProgressPercent?: number;
+  liveRisk?: any;
+  liveAlerts?: any[] | null;
 }
 
 export default function MissionStatusCard({
@@ -30,16 +32,19 @@ export default function MissionStatusCard({
   isRedAlert,
   etaRemainingS,
   tripProgressPercent,
+  liveRisk,
+  liveAlerts,
 }: MissionStatusCardProps) {
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [entered, setEntered] = useState(false);
 
   const missionState: MissionState = useMemo(() => {
-    if (organPlan?.risk_status === 'critical') return 'CRITICAL';
+    const risk = liveRisk?.overall ?? organPlan?.risk_status;
+    if (risk === 'critical') return 'CRITICAL';
     if (isRedAlert) return 'ALERT';
     if (organPlan) return 'EN ROUTE';
     return 'IDLE';
-  }, [organPlan, isRedAlert]);
+  }, [organPlan, isRedAlert, liveRisk?.overall]);
 
   const stateStyle = STATE_STYLES[missionState];
   const etaDisplay =
@@ -70,8 +75,8 @@ export default function MissionStatusCard({
   }, [overlayOpen]);
 
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[2] flex flex-col items-center">
-      {/* Expandable overlay: backdrop + panel anchored above card */}
+    <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[2] flex flex-col items-center">
+      {/* Expandable overlay: backdrop + panel anchored below card */}
       {overlayOpen && (
         <>
           <button
@@ -82,16 +87,18 @@ export default function MissionStatusCard({
             aria-label="Close mission summary"
           />
           <div
-            className="absolute bottom-full left-1/2 -translate-x-1/2 z-[4] mb-2 w-[320px] max-h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-black/40 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-200 ease-out pointer-events-auto"
+            className="absolute top-full left-1/2 -translate-x-1/2 z-[4] mt-2 w-[320px] max-h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-black/40 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-200 ease-out pointer-events-auto"
             style={{
               opacity: entered ? 1 : 0,
-              transform: entered ? 'translate(-50%, 0)' : 'translate(-50%, 8px)',
+              transform: entered ? 'translate(-50%, 0)' : 'translate(-50%, -8px)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <MissionDetailsPanel
               plan={organPlan}
               tripProgressPercent={tripProgressPercent}
+              liveRisk={liveRisk}
+              liveAlerts={liveAlerts}
               isOpen={true}
               onToggle={() => setOverlayOpen(false)}
               className="rounded-2xl"
@@ -133,12 +140,12 @@ export default function MissionStatusCard({
           <div className="flex justify-between gap-2">
             <span className="text-gray-500 uppercase">Risk</span>
             <span className={`capitalize font-semibold ${
-              organPlan?.risk_status === 'critical' ? 'text-red-400' :
-              organPlan?.risk_status === 'high' ? 'text-orange-400' :
-              organPlan?.risk_status === 'medium' ? 'text-amber-400' :
+              (liveRisk?.overall ?? organPlan?.risk_status) === 'critical' ? 'text-red-400' :
+              (liveRisk?.overall ?? organPlan?.risk_status) === 'high' ? 'text-orange-400' :
+              (liveRisk?.overall ?? organPlan?.risk_status) === 'medium' ? 'text-amber-400' :
               'text-emerald-400'
             }`}>
-              {organPlan?.risk_status ?? '—'}
+              {liveRisk?.overall ?? organPlan?.risk_status ?? '—'}
             </span>
           </div>
         </div>
