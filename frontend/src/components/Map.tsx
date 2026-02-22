@@ -200,12 +200,16 @@ export default function LiveMap({
   onNavUpdate,
   onScenarioInject,
   onScenarioClear,
+  showEtaPanel: showEtaPanelProp,
+  onEtaPanelChange,
 }: {
   activeScenario?: any;
   organPlan?: { transport_mode?: string; eta_total_s?: number; risk_status?: string; donor_hospital?: string; recipient_hospital?: string } | null;
   onNavUpdate?: (nav: NavLive) => void;
   onScenarioInject?: (s: any) => void;
   onScenarioClear?: () => void;
+  showEtaPanel?: boolean;
+  onEtaPanelChange?: (open: boolean) => void;
 }) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -225,8 +229,10 @@ export default function LiveMap({
   // Algorithm comparison
   const algoRef = useRef<'dijkstra' | 'bmsssp'>('dijkstra');
   const [algoStats, setAlgoStats] = useState<{ dijkstra?: AlgoStats; bmsssp?: AlgoStats }>({});
-  const [showEtaPanel, setShowEtaPanel] = useState(false);
+  const [showEtaPanelLocal, setShowEtaPanelLocal] = useState(false);
   const [isFetchingStats, setIsFetchingStats] = useState(false);
+  const showEtaPanel = showEtaPanelProp ?? showEtaPanelLocal;
+  const setShowEtaPanel = onEtaPanelChange ? (v: boolean) => onEtaPanelChange(v) : setShowEtaPanelLocal;
 
   // UI feedback
   const [isRouting, setIsRouting] = useState(false);
@@ -248,6 +254,14 @@ export default function LiveMap({
   const roadblockStopIdx = useRef<number | null>(null); // route index where to stop
   // Pending reroute: stored here until ambulance reaches the roadblock, then applied
   const pendingRerouteRef = useRef<{ coords: [number, number][]; cumDist: number[]; cumTime: number[]; totalDist: number; totalTime: number; steps: NavStep[]; algorithm: string } | null>(null);
+
+  // When dev panel opens (from nav or in-map), fetch algo stats once; when it closes, hide algo race
+  const prevShowEtaPanelRef = useRef(false);
+  useEffect(() => {
+    if (showEtaPanel && !prevShowEtaPanelRef.current) fetchBothAlgoStats();
+    if (!showEtaPanel) setShowAlgoRace(false);
+    prevShowEtaPanelRef.current = showEtaPanel;
+  }, [showEtaPanel]);
 
   // Escape closes dev panel (same as Mission Status overlay)
   useEffect(() => {
@@ -1477,6 +1491,8 @@ export default function LiveMap({
           </div>
         </div>
       )}
+
+      {/* Dev button (panel stays at left-[39%] when open) */}
       <div className="absolute bottom-4 left-20 z-50">
         <button
           onClick={() => {

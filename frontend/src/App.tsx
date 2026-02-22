@@ -64,6 +64,7 @@ function App() {
   const [organPlan, setOrganPlan] = useState<OrganPlanSummary | null>(null);
   const [backendUnreachable, setBackendUnreachable] = useState(false);
   const [moduleState, setModuleState] = useState<Record<ModuleSlot, ModuleState>>(initialModuleState);
+  const [showDevPanel, setShowDevPanel] = useState(false);
   const aiRef = useRef<any>(null);
 
   const setModule = (id: ModuleSlot, patch: Partial<ModuleState>) => {
@@ -192,8 +193,8 @@ function App() {
                 <span className="text-white/50 text-xs font-normal tracking-widest ml-2">// AI TRANSPARENCY</span>
               </h1>
               <nav className="flex items-center gap-1 ml-2">
-                <a href="#/" onClick={(e) => { e.preventDefault(); window.location.hash = ''; setCurrentView('dashboard'); }} className="px-2.5 py-1 rounded font-mono text-[10px] uppercase tracking-wider text-red-400 border border-red-500/50 bg-red-500/10 hover:bg-red-500/20">Dashboard</a>
-                <a href="#/ai-transparency" onClick={(e) => { e.preventDefault(); window.location.hash = '#/ai-transparency'; setCurrentView('ai-transparency'); }} className="px-2.5 py-1 rounded font-mono text-[10px] uppercase tracking-wider text-white/80 border border-white/20 bg-white/10">AI Transparency</a>
+                <a href="#/" onClick={(e) => { e.preventDefault(); window.location.hash = ''; setCurrentView('dashboard'); }} className="px-2.5 py-1 rounded font-mono text-[10px] uppercase tracking-wider text-white/80 border border-white/20 bg-white/10 hover:bg-white/20 hover:text-white">Dashboard</a>
+                <a href="#/ai-transparency" onClick={(e) => { e.preventDefault(); window.location.hash = '#/ai-transparency'; setCurrentView('ai-transparency'); }} className="px-2.5 py-1 rounded font-mono text-[10px] uppercase tracking-wider text-red-400 border border-red-500/50 bg-red-500/10 hover:bg-red-500/20">AI Transparency</a>
               </nav>
             </div>
             <div className="flex items-center gap-3">
@@ -219,6 +220,8 @@ function App() {
                 onNavUpdate={setNavData}
                 onScenarioInject={handleScenarioInject}
                 onScenarioClear={handleScenarioClear}
+                showEtaPanel={showDevPanel}
+                onEtaPanelChange={setShowDevPanel}
               />
             </MapErrorBoundary>
             <MissionStatusCard
@@ -286,7 +289,7 @@ function App() {
               </h1>
               <nav className="flex items-center gap-1 ml-2">
                 <a href="#/" onClick={(e) => { e.preventDefault(); window.location.hash = ''; setCurrentView('dashboard'); }} className="px-2.5 py-1 rounded font-mono text-[10px] uppercase tracking-wider text-red-400 border border-red-500/50 bg-red-500/10 hover:bg-red-500/20">Dashboard</a>
-                <a href="#/ai-transparency" onClick={(e) => { e.preventDefault(); window.location.hash = '#/ai-transparency'; setCurrentView('ai-transparency'); }} className="px-2.5 py-1 rounded font-mono text-[10px] uppercase tracking-wider text-red-400 border border-red-500/50 bg-red-500/10 hover:bg-red-500/20">AI Transparency</a>
+                <a href="#/ai-transparency" onClick={(e) => { e.preventDefault(); window.location.hash = '#/ai-transparency'; setCurrentView('ai-transparency'); }} className="px-2.5 py-1 rounded font-mono text-[10px] uppercase tracking-wider text-white/60 border border-white/10 bg-white/5 hover:bg-white/10 hover:text-white/80">AI Transparency</a>
               </nav>
               {audioError && <span className="px-2 py-0.5 bg-amber-900/40 border border-amber-500 rounded text-amber-400 text-[10px] font-mono">AUDIO_BLOCKED</span>}
             </div>

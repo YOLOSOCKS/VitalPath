@@ -3,8 +3,8 @@ import ConfidenceBadge from '../components/ConfidenceBadge';
 
 const SECTION_CLASS =
   'rounded-xl border border-white/10 bg-black/40 backdrop-blur-xl shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)] shadow-[0_4px_20px_rgba(0,0,0,0.35)] overflow-hidden';
-const SECTION_HEADER = 'text-red-400 font-mono text-[10px] font-bold uppercase tracking-widest mb-3';
-const BODY = 'text-gray-300 text-sm font-mono leading-relaxed';
+const SECTION_HEADER = 'text-red-400 font-mono text-sm font-bold uppercase tracking-widest mb-3';
+const BODY = 'text-gray-300 text-xs font-mono leading-relaxed';
 const MUTED = 'text-gray-500 font-mono text-[10px] uppercase tracking-wider';
 
 export default function AITransparency() {
@@ -16,8 +16,8 @@ export default function AITransparency() {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-6 md:p-8 max-w-3xl mx-auto">
       <div className="space-y-6">
-        <div className="pb-2">
-          <p className={MUTED}>How VitalPath AI works and what you should know</p>
+        <div className={`${SECTION_CLASS} px-4 py-3`}>
+          <p className={`${MUTED} m-0`}>How VitalPath AI works and what you should know</p>
         </div>
 
         <section className={`${SECTION_CLASS} p-5`}>
@@ -26,7 +26,7 @@ export default function AITransparency() {
             VitalPath AI monitors life-critical cargo—organs, blood products, and vaccines—using sensor data (temperature, shock, lid seal, battery) and routing context.
             It flags risks and suggests next steps to keep shipments within cold-chain and handling specs.
           </p>
-          <p className="text-amber-200/90 text-sm font-mono leading-relaxed">
+          <p className="text-amber-200/90 text-xs font-mono leading-relaxed">
             <strong>Important:</strong> All outputs are advisory only. They are not a substitute for transport protocols or receiving-facility decisions.
             Always follow official procedures and professional judgment.
           </p>
@@ -78,7 +78,7 @@ export default function AITransparency() {
             VitalPath AI follows a structured workflow: user input and context are processed through structured prompts,
             validated by internal layers, and optionally reviewed by humans before presentation.
           </p>
-          <p className="text-gray-400 text-sm font-mono leading-relaxed">
+          <p className="text-gray-400 text-xs font-mono leading-relaxed">
             We use high-level training with domain-relevant data, structured prompts to constrain outputs,
             validation layers to catch obvious errors, and human review where appropriate.
           </p>
