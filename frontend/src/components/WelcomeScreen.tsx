@@ -34,7 +34,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'radial-gradient(ellipse at center, #1a0a0a 0%, #0a0505 50%, #000000 100%)',
+                background: 'radial-gradient(ellipse at center, var(--welcome-bg-start) 0%, var(--welcome-bg-mid) 50%, var(--welcome-bg-end) 100%)',
                 overflow: 'hidden',
                 cursor: 'default',
             }}
@@ -44,7 +44,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                     position: 'absolute',
                     inset: 0,
                     opacity: 0.05,
-                    backgroundImage: 'linear-gradient(#ef4444 1px, transparent 1px), linear-gradient(90deg, #ef4444 1px, transparent 1px)',
+                    backgroundImage: 'linear-gradient(var(--primary-red-glow) 1px, transparent 1px), linear-gradient(90deg, var(--primary-red-glow) 1px, transparent 1px)',
                     backgroundSize: '50px 50px',
                     pointerEvents: 'none',
                 }}
@@ -63,14 +63,14 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                         fontSize: 'clamp(3rem, 8vw, 6rem)',
                         fontWeight: 900,
                         letterSpacing: '-0.03em',
-                        color: '#fff',
+                        color: 'var(--text-primary)',
                         fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
                         margin: 0,
                         lineHeight: 1,
-                        textShadow: '0 0 40px rgba(239, 68, 68, 0.3), 0 0 80px rgba(239, 68, 68, 0.15)',
+                        textShadow: '0 0 40px var(--primary-red-glow-rgba-30), 0 0 80px var(--primary-red-glow-rgba-15)',
                     }}
                 >
-                    <span style={{ color: '#ef4444', textShadow: '0 0 40px rgba(239, 68, 68, 0.6), 0 0 80px rgba(239, 68, 68, 0.25)' }}>Vital</span><span style={{ color: '#fff' }}>Path AI</span>
+                    <span style={{ color: 'var(--primary-red-glow)', textShadow: '0 0 40px var(--primary-red-glow-rgba-60), 0 0 80px var(--primary-red-glow-rgba-25)' }}>Vital</span><span style={{ color: 'var(--text-primary)' }}>Path AI</span>
                 </h1>
 
                 <motion.div
@@ -81,7 +81,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                         fontFamily: 'ui-monospace, SFMono-Regular, monospace',
                         fontSize: '0.85rem',
                         letterSpacing: '0.3em',
-                        color: '#f87171',
+                        color: 'var(--primary-red-glow)',
                         textTransform: 'uppercase',
                         marginTop: '0.75rem',
                         opacity: 0.85,
@@ -102,10 +102,10 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                             fontFamily: 'ui-monospace, SFMono-Regular, monospace',
                             fontSize: 'clamp(0.85rem, 2vw, 1.1rem)',
                             letterSpacing: '0.2em',
-                            color: i === 2 ? '#f87171' : 'rgba(255,255,255,0.6)',
+                            color: i === 2 ? 'var(--primary-red-glow)' : 'var(--text-muted-60)',
                             fontWeight: i === 2 ? 700 : 400,
                             marginBottom: '0.6rem',
-                            textShadow: i === 2 ? '0 0 20px rgba(239, 68, 68, 0.5)' : 'none',
+                            textShadow: i === 2 ? '0 0 20px var(--primary-red-glow-rgba-50)' : 'none',
                         }}
                     >
                         ▸ {text}
@@ -131,24 +131,24 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                         letterSpacing: '0.35em',
                         fontWeight: 700,
                         textTransform: 'uppercase',
-                        color: '#f87171',
-                        background: 'rgba(239, 68, 68, 0.08)',
-                        border: '2px solid rgba(239, 68, 68, 0.5)',
+                        color: 'var(--primary-red-glow)',
+                        background: 'var(--primary-red-glow-rgba-08)',
+                        border: '2px solid var(--primary-red-glow-rgba-50)',
                         borderRadius: 8,
                         padding: '1rem 2.5rem',
                         cursor: exiting ? 'default' : 'pointer',
-                        boxShadow: '0 0 30px rgba(239, 68, 68, 0.2)',
+                        boxShadow: 'var(--glow-soft-30)',
                         transition: 'border-color 0.2s, box-shadow 0.2s',
                     }}
                     onMouseEnter={(e) => {
                         if (!exiting) {
-                            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.9)';
-                            e.currentTarget.style.boxShadow = '0 0 40px rgba(239, 68, 68, 0.35)';
+                            e.currentTarget.style.borderColor = 'var(--primary-red-glow-rgba-90)';
+                            e.currentTarget.style.boxShadow = 'var(--glow-strong)';
                         }
                     }}
                     onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
-                        e.currentTarget.style.boxShadow = '0 0 30px rgba(239, 68, 68, 0.2)';
+                        e.currentTarget.style.borderColor = 'var(--primary-red-glow-rgba-50)';
+                        e.currentTarget.style.boxShadow = 'var(--glow-soft-30)';
                     }}
                 >
                     {exiting ? '…' : 'Begin'}
@@ -164,7 +164,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                     bottom: '2rem',
                     width: '60%',
                     height: 1,
-                    background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.4), transparent)',
+                    background: 'linear-gradient(90deg, transparent, var(--primary-red-glow-rgba-40), transparent)',
                     transformOrigin: 'center',
                     zIndex: 2,
                 }}
@@ -179,7 +179,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                         style={{
                             position: 'absolute',
                             inset: 0,
-                            background: 'radial-gradient(circle, rgba(239,68,68,0.35) 0%, transparent 70%)',
+                            background: 'radial-gradient(circle, var(--primary-red-glow-rgba-35) 0%, transparent 70%)',
                             zIndex: 10,
                             pointerEvents: 'none',
                         }}

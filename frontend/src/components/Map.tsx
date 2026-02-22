@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import axios from 'axios';
 import AlgoRaceMiniMap, { AlgoRaceData } from './AlgoRaceMiniMap';
+import { theme } from '../styles/theme';
 type LatLng = { lat: number; lng: number };
 
 export type NavLive = {
@@ -324,35 +325,27 @@ export default function LiveMap({
       pitch: 70,
     });
 
-    // Vehicle marker
+    // Vehicle marker with pulsing ring (theme red)
     const el = document.createElement('div');
-    el.className = 'ambulance-marker';    el.style.width = '40px';
-    el.style.height = '40px';
-    el.style.display = 'flex';
-    el.style.alignItems = 'center';
-    el.style.justifyContent = 'center';
-    el.style.willChange = 'transform';
+    el.className = 'ambulance-marker';
+    el.style.cssText = 'position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;will-change:transform';
+    const red = theme.colors.primaryRedGlow;
     el.innerHTML = `
-      <svg id="veh" width="40" height="40" viewBox="0 0 64 64" style="filter: drop-shadow(0 0 10px #ef4444);">
-        <!-- body -->
-        <rect x="8" y="18" width="48" height="26" rx="6" fill="#1e293b" stroke="#ef4444" stroke-width="2"/>
-        <!-- cab -->
-        <path d="M44 18 L56 18 Q58 18 58 20 L58 38 L44 38 Z" fill="#0f172a" stroke="#ef4444" stroke-width="1.5"/>
-        <!-- windshield -->
+      <span class="map-vehicle-pulse-ring" style="position:absolute;width:56px;height:56px;margin-left:0;margin-top:0;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;border:2px solid ${red};opacity:0.35;animation:map-vehicle-pulse 2s ease-in-out infinite;pointer-events:none"></span>
+      <svg id="veh" width="40" height="40" viewBox="0 0 64 64" style="filter: drop-shadow(0 0 10px ${red}); position:relative; z-index:1">
+        <rect x="8" y="18" width="48" height="26" rx="6" fill="#1e293b" stroke="${red}" stroke-width="2"/>
+        <path d="M44 18 L56 18 Q58 18 58 20 L58 38 L44 38 Z" fill="#0f172a" stroke="${red}" stroke-width="1.5"/>
         <path d="M46 22 L54 22 Q55 22 55 23 L55 32 L46 32 Z" fill="#38bdf8" opacity="0.5"/>
-        <!-- red cross -->
-        <rect x="20" y="29" width="12" height="3" rx="1" fill="#ef4444"/>
-        <rect x="24.5" y="25" width="3" height="11" rx="1" fill="#ef4444"/>
-        <!-- siren -->
-        <rect x="24" y="13" width="8" height="6" rx="2" fill="#ef4444" opacity="0.9"/>
-        <rect x="24" y="13" width="8" height="6" rx="2" fill="#ef4444" opacity="0.5">
+        <rect x="20" y="29" width="12" height="3" rx="1" fill="${red}"/>
+        <rect x="24.5" y="25" width="3" height="11" rx="1" fill="${red}"/>
+        <rect x="24" y="13" width="8" height="6" rx="2" fill="${red}" opacity="0.9"/>
+        <rect x="24" y="13" width="8" height="6" rx="2" fill="${red}" opacity="0.5">
           <animate attributeName="opacity" values="0.3;1;0.3" dur="0.8s" repeatCount="indefinite"/>
         </rect>
-        <!-- wheels -->
-        <circle cx="18" cy="44" r="5" fill="#334155" stroke="#ef4444" stroke-width="1.5"/>
-        <circle cx="18" cy="44" r="2" fill="#ef4444"/>
-        <circle cx="46" cy="44" r="5" fill="#334155" stroke="#ef4444" stroke-width="1.5"/>
-        <circle cx="46" cy="44" r="2" fill="#ef4444"/>
+        <circle cx="18" cy="44" r="5" fill="#334155" stroke="${red}" stroke-width="1.5"/>
+        <circle cx="18" cy="44" r="2" fill="${red}"/>
+        <circle cx="46" cy="44" r="5" fill="#334155" stroke="${red}" stroke-width="1.5"/>
+        <circle cx="46" cy="44" r="2" fill="${red}"/>
       </svg>
     `;
     ambulanceMarker.current = new maplibregl.Marker({ element: el }).setLngLat([DEFAULT_CENTER.lng, DEFAULT_CENTER.lat]).addTo(map.current);
@@ -362,17 +355,38 @@ export default function LiveMap({
         data: { type: 'FeatureCollection', features: [] },
       });
 
+      // Route glow (wider, translucent) then main line (thicker + solid)
+      map.current?.addLayer({
+        id: 'vitalpath-route-glow',
+        type: 'line',
+        source: 'vitalpath-route',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-width': 14, 'line-color': theme.colors.primaryRedGlow, 'line-opacity': 0.22 },
+      });
       map.current?.addLayer({
         id: 'vitalpath-route-line',
         type: 'line',
         source: 'vitalpath-route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-width': 6, 'line-color': '#ef4444', 'line-opacity': 0.85 },      });
+        paint: { 'line-width': 8, 'line-color': theme.colors.primaryRedGlow, 'line-opacity': 0.92 },
+      });
 
-      // Road closure markers source
+      // Road closure markers source: outer ring + inner circle for distinct look
       map.current?.addSource('road-closures', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
+      });
+      map.current?.addLayer({
+        id: 'road-closures-circle-outer',
+        type: 'circle',
+        source: 'road-closures',
+        paint: {
+          'circle-radius': 14,
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-color': theme.colors.roadblockCircle,
+          'circle-stroke-width': 2.5,
+          'circle-opacity': 0.95,
+        },
       });
       map.current?.addLayer({
         id: 'road-closures-circle',
@@ -380,9 +394,9 @@ export default function LiveMap({
         source: 'road-closures',
         paint: {
           'circle-radius': 10,
-          'circle-color': '#ff4444',
-          'circle-stroke-color': '#ffffff',
-          'circle-stroke-width': 2.5,
+          'circle-color': theme.colors.roadblockCircle,
+          'circle-stroke-color': theme.colors.textPrimary,
+          'circle-stroke-width': 2,
           'circle-opacity': 0.9,
         },
       });
@@ -396,9 +410,7 @@ export default function LiveMap({
           'text-allow-overlap': true,
         },
         paint: {
-          'text-color': '#ffffff',
-
-
+          'text-color': theme.colors.textPrimary,
         },
       });
 
@@ -607,7 +619,7 @@ export default function LiveMap({
         destEl.style.justifyContent = 'center';
         destEl.innerHTML = `
           <svg width="32" height="32" viewBox="0 0 24 24" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#ef4444" stroke="white" stroke-width="1.2"/>
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${theme.colors.primaryRedGlow}" stroke="white" stroke-width="1.2"/>
             <circle cx="12" cy="9" r="2.5" fill="white"/>
           </svg>
         `;
@@ -1345,35 +1357,45 @@ export default function LiveMap({
 
   return (
     <div className="w-full h-full relative">
+      <style>{`
+        @keyframes map-vehicle-pulse {
+          0%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 0.35; }
+          50% { transform: translate(-50%,-50%) scale(1.15); opacity: 0.2; }
+        }
+      `}</style>
       <div ref={mapContainer} className="w-full h-full rounded-2xl overflow-hidden border border-white/10" />
+      {/* Soft top/bottom gradients for depth */}
+      <div className="absolute inset-x-0 top-0 h-28 pointer-events-none z-[1] bg-gradient-to-b from-black/50 via-black/10 to-transparent rounded-t-2xl" aria-hidden />
+      <div className="absolute inset-x-0 bottom-0 h-28 pointer-events-none z-[1] bg-gradient-to-t from-black/50 via-black/10 to-transparent rounded-b-2xl" aria-hidden />
 
-      {/* HUD: MINIMAL CORNER OVERLAY */}
-      <div className="absolute top-4 left-4 flex flex-col gap-2">
-        <div className="bg-black/80 backdrop-blur-xl p-3 rounded-lg border border-red-500/30 flex flex-col gap-1 min-w-[220px]">
+      {/* HUD: glass panels with theme borders and hierarchy */}
+      <div className="absolute top-4 left-4 flex flex-col gap-2 z-[2]">
+        <div className="map-hud-panel bg-black/40 backdrop-blur-xl p-3.5 rounded-xl border min-w-[220px] flex flex-col gap-1.5 border-white/10 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)]">
           <div className="flex items-center gap-2">
             <div
-              className={`w-2 h-2 rounded-full ${activeScenario?.isRedAlert ? 'bg-amber-500 animate-pulse' : 'bg-red-400'
-                }`}
+              className={`w-2 h-2 rounded-full shrink-0 ${activeScenario?.isRedAlert ? 'bg-amber-500 animate-pulse' : 'bg-red-400'}`}
             />
-            <span className="text-red-400 text-[10px] font-mono font-bold uppercase tracking-tighter">              {activeScenario?.title || 'SYSTEM IDLE'}
+            <span className="text-red-400 font-mono text-[10px] font-bold uppercase tracking-tight">
+              {activeScenario?.title || 'SYSTEM IDLE'}
             </span>
           </div>
           <div className="text-[9px] text-gray-500 font-mono">
             SHIPMENT // {currentPos ? `${currentPos[0].toFixed(5)}, ${currentPos[1].toFixed(5)}` : '--, --'}
           </div>
           {routeRef.current?.totalDist != null && routeRef.current?.totalTime != null && (
-            <div className="text-[9px] text-gray-500 font-mono">
-              ROUTE // {(routeRef.current.totalDist / 1000).toFixed(2)} km // ETA {formatEta(routeRef.current.totalTime)}
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-[9px] text-gray-500 font-mono">ROUTE</span>
+              <span className="text-white font-mono text-xs font-semibold tabular-nums">{(routeRef.current.totalDist / 1000).toFixed(2)} km</span>
+              <span className="text-red-400 font-mono text-sm font-bold tabular-nums">{formatEta(routeRef.current.totalTime)}</span>
             </div>
           )}
           {routeError && <div className="text-[10px] text-red-300 font-mono mt-1 max-w-[300px]">{routeError}</div>}
         </div>
-
       </div>
 
-      {/* Transport mode + ETA + controls (replaces address input — destination from mission/scenario) */}
+      {/* Transport mode + ETA + controls */}
       <div className="absolute top-4 right-4 z-50">
-        <div className="bg-black/80 backdrop-blur-xl p-3 rounded-lg border border-white/10 flex gap-2 items-center">
+        <div className="map-hud-panel bg-black/40 backdrop-blur-xl p-3.5 rounded-xl border border-white/10 flex gap-3 items-center shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)]">
           {!activeScenario ? (
             <span className="text-gray-500 font-mono text-xs px-2">Select a scenario to start</span>
           ) : (
@@ -1386,7 +1408,7 @@ export default function LiveMap({
               <span className="text-red-400 font-mono text-xs uppercase tracking-wider">
                 {organPlan?.transport_mode ?? 'Road'}
               </span>
-              <span className="text-gray-500 font-mono text-[10px]">
+              <span className="text-white font-mono text-sm font-bold tabular-nums">
                 ETA {routeRef.current?.totalTime != null
                   ? formatEta(routeRef.current.totalTime)
                   : organPlan?.eta_total_s != null
@@ -1425,7 +1447,7 @@ export default function LiveMap({
       {/* Bottom-left Dev panel */}
       <div className="absolute bottom-4 left-4 z-50 flex flex-col items-start gap-2">
         {showEtaPanel && (
-          <div className="bg-black/90 backdrop-blur-xl p-4 rounded-lg border border-red-500/30 min-w-[300px] flex flex-col gap-3 shadow-[0_0_30px_rgba(239,68,68,0.1)]">
+          <div className="map-hud-panel bg-black/40 backdrop-blur-xl p-4 rounded-xl border border-white/10 min-w-[300px] flex flex-col gap-3 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)]">
             {/* Algorithm Comparison */}
             <div>
               <div className="text-[10px] text-red-400 font-mono font-bold uppercase tracking-wider mb-2">Algorithm Comparison</div>              {isFetchingStats ? (
@@ -1462,7 +1484,7 @@ export default function LiveMap({
                     ? 'border-blue-400 text-blue-300 bg-blue-500/20 hover:bg-blue-500/40 hover:text-white hover:border-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.25)]'
                     : data.isRedAlert
                       ? 'border-amber-500/40 text-amber-500 bg-amber-500/5 hover:bg-amber-500 hover:text-black hover:border-amber-400 shadow-[0_0_15px_rgba(234,179,8,0.3)]'
-                      : 'border-red-500/40 text-red-400 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_rgba(239,68,68,0.15)]';                  return (
+                      : 'border-red-500/40 text-red-400 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_var(--primary-red-glow-rgba-15)]';                  return (
                     <button
                       key={key}
                       onClick={() => {
@@ -1511,8 +1533,9 @@ export default function LiveMap({
           }}
           className={
             showEtaPanel
-              ? 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-red-500/30 border-red-400/50 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
-              : 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-black/80 backdrop-blur-xl border-white/10 text-gray-400 hover:text-red-300 hover:border-red-500/30'          }
+              ? 'map-hud-panel px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all duration-300 bg-red-500/20 border-red-500/40 text-red-300 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-15)]'
+              : 'map-hud-panel px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all duration-300 bg-black/40 backdrop-blur-xl border-white/10 text-gray-400 hover:text-red-300 hover:border-red-500/30'
+          }
         >
           {showEtaPanel ? '✕ DEV' : '⚙ DEV'}
         </button>

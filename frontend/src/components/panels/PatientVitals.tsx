@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
+const glassCardBase = 'bg-black/35 backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)] shadow-[0_4px_24px_rgba(0,0,0,0.28)] overflow-hidden';
+const glassCardInner = 'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]';
+const panelTitleClass = 'text-red-400 font-mono text-sm font-bold tracking-widest uppercase drop-shadow-[0_0_8px_var(--primary-red-glow-rgba-20)]';
+
 /** Cargo telemetry from container sensors (temperature, shock, lid, battery, elapsed time) */
 interface CargoTelemetry {
   temperature_c?: number;
@@ -23,6 +27,18 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
   const [temp, setTemp] = useState(cargo?.temperature_c ?? 4.5);
   const [shock, setShock] = useState(cargo?.shock_g ?? 0);
   const [elapsed, setElapsed] = useState(cargo?.elapsed_time_s ?? 0);
+
+  const [isRedAlert, setRedAlert] = useState(false);
+
+  useEffect(() => {
+    const body = typeof document !== 'undefined' ? document.body : null;
+    if (!body) return;
+    const check = () => setRedAlert(body.classList.contains('red-alert'));
+    check();
+    const mo = new MutationObserver(check);
+    mo.observe(body, { attributes: true, attributeFilter: ['class'] });
+    return () => mo.disconnect();
+  }, []);
 
   const hasCargo = Boolean(scenarioTitle && cargo);
   const isEnRouteToPickup = scenarioTitle?.toUpperCase().includes('BLOOD') && !patientOnBoard;
@@ -57,10 +73,12 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
     return () => clearInterval(interval);
   }, [hasCargo]);
 
+  const alertBorder = isRedAlert ? 'glass-mission-card--alert border-amber-500/50' : '';
+
   return (
-    <div className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden ${className}`}>
-      <div className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-white/5">
-        <h2 className="text-red-400 font-mono text-sm tracking-widest uppercase">
+    <div className={`glass-mission-card ${glassCardBase} ${glassCardInner} flex flex-col ${alertBorder} ${className}`}>
+      <div className="h-12 shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/5">
+        <h2 className={panelTitleClass}>
           Cargo Status
         </h2>
         <div className="flex items-center gap-2">
@@ -69,7 +87,7 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
         </div>
       </div>
 
-      <div className="p-4 flex flex-col flex-1 min-h-0 overflow-y-auto">
+      <div className="p-5 flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4">
       {!scenarioTitle && (
         <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
           <div className="text-gray-600 text-3xl mb-3">📦</div>
@@ -96,7 +114,7 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
             </div>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className={`border p-2 rounded ${tempOk ? 'bg-white/5 border-white/10' : 'bg-amber-950/20 border-amber-500/40'}`}>
               <div className="text-gray-400 text-[10px] font-mono">Temperature</div>
               <div className={`text-2xl font-mono font-bold ${tempOk ? 'text-green-400' : 'text-amber-400'}`}>{temp.toFixed(1)}°C</div>
@@ -116,7 +134,7 @@ export default function PatientVitals({ className, scenarioData, scenarioTitle, 
             </div>
           </div>
 
-          <div className="bg-white/5 p-2 rounded border border-white/10 flex justify-between items-center">
+          <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex justify-between items-center">
             <div>
               <div className="text-gray-400 text-[10px] font-mono">Elapsed (transport)</div>
               <div className="text-lg text-white font-mono">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</div>

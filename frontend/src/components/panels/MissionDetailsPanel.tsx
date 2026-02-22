@@ -1,8 +1,16 @@
 /**
  * Mission Details Panel: donor/recipient, organ type, max safe time, ETA, transport mode, risk.
  * Collapsible; each panel opens/closes independently. Auto-opens when a plan is set.
+ * Glass mission card style; alert state synced from body.red-alert.
  */
 import React, { useState, useEffect } from 'react';
+
+const glassCardBase =
+  'bg-black/35 backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)] shadow-[0_4px_24px_rgba(0,0,0,0.28)] overflow-hidden';
+const glassCardInner = 'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]';
+const panelTitleClass = 'text-red-400 font-mono text-sm font-bold tracking-widest uppercase drop-shadow-[0_0_8px_var(--primary-red-glow-rgba-20)]';
+
+const alertBorder = (isAlert: boolean) => isAlert ? 'glass-mission-card--alert border-amber-500/50' : '';
 
 export type TransportMode = 'road' | 'air' | 'hybrid';
 export type RiskStatus = 'low' | 'medium' | 'high' | 'critical';
@@ -73,30 +81,50 @@ export default function MissionDetailsPanel({
   const isControlled = controlledOpen !== undefined && controlledToggle !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const onToggle = isControlled ? controlledToggle : () => setInternalOpen((o) => !o);
+  const [isRedAlert, setRedAlert] = useState(false);
 
-  // Auto-open when a mission plan is set
+  useEffect(() => {
+    const body = typeof document !== 'undefined' ? document.body : null;
+    if (!body) return;
+    const check = () => setRedAlert(body.classList.contains('red-alert'));
+    check();
+    const mo = new MutationObserver(check);
+    mo.observe(body, { attributes: true, attributeFilter: ['class'] });
+    return () => mo.disconnect();
+  }, []);
+
   useEffect(() => {
     if (plan && !isControlled) setInternalOpen(true);
   }, [plan, isControlled]);
 
+
   if (!plan) {
     return (
+      <>
+        <style>{`
+          @keyframes glass-card-pulse {
+            0%, 100% { box-shadow: 0 0 14px var(--alert-amber-rgba-20); }
+            50% { box-shadow: 0 0 22px var(--alert-amber-rgba-20); }
+          }
+          .glass-mission-card--alert { animation: glass-card-pulse 2.5s ease-in-out infinite; }
+        `}</style>
       <div
         onClick={onToggle}
-        className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden cursor-pointer transition-all duration-300 ${className} ${open ? 'min-h-[120px]' : 'h-12 shrink-0'}`}
+        className={`glass-mission-card ${glassCardBase} ${glassCardInner} flex flex-col cursor-pointer transition-all duration-300 ${alertBorder(isRedAlert)} ${className} ${open ? 'min-h-[120px]' : 'h-12 shrink-0'}`}
       >
-        <div className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-white/5">
-          <h2 className="text-red-400 font-mono text-sm tracking-widest uppercase">Mission Summary</h2>
+        <div className="h-12 shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/5">
+          <h2 className={panelTitleClass}>Mission Summary</h2>
           <span className="text-gray-500 text-[10px] font-mono">{open ? '▼' : '▲'}</span>
         </div>
         {open && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center py-6 px-4">
-            <div className="text-gray-500 text-4xl mb-2">📋</div>
+          <div className="flex-1 flex flex-col items-center justify-center text-center py-8 px-5">
+            <div className="text-gray-500 text-4xl mb-3">📋</div>
             <div className="text-gray-400 font-mono text-sm uppercase tracking-wider">No active mission</div>
-            <div className="text-gray-600 font-mono text-[10px] mt-1">Select a scenario on the map to start</div>
+            <div className="text-gray-600 font-mono text-[10px] mt-1.5">Select a scenario on the map to start</div>
           </div>
         )}
       </div>
+    </>
     );
   }
 
@@ -104,20 +132,28 @@ export default function MissionDetailsPanel({
   const urgencyColor = URGENCY_COLORS[plan.risk_status] || URGENCY_COLORS.low;
 
   return (
+    <>
+      <style>{`
+        @keyframes glass-card-pulse {
+          0%, 100% { box-shadow: 0 0 14px var(--alert-amber-rgba-20); }
+          50% { box-shadow: 0 0 22px var(--alert-amber-rgba-20); }
+        }
+        .glass-mission-card--alert { animation: glass-card-pulse 2.5s ease-in-out infinite; }
+      `}</style>
     <div
-      className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden transition-all duration-300 ${className} ${open ? 'min-h-0' : 'h-12 shrink-0'}`}
+      className={`glass-mission-card ${glassCardBase} ${glassCardInner} flex flex-col transition-all duration-300 ${alertBorder(isRedAlert)} ${className} ${open ? 'min-h-0' : 'h-12 shrink-0'}`}
     >
       <div
         onClick={onToggle}
-        className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-white/5 cursor-pointer hover:bg-white/5"
+        className="h-12 shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5"
       >
-        <h2 className="text-red-400 font-mono text-sm tracking-widest uppercase">Mission Summary</h2>
+        <h2 className={panelTitleClass}>Mission Summary</h2>
         <span className="text-gray-500 text-[10px] font-mono">{open ? '▼' : '▲'}</span>
       </div>
       {open && (
-        <div className="p-4 flex flex-col overflow-y-auto">
+        <div className="p-5 flex flex-col overflow-y-auto space-y-4">
       {/* Donor / Recipient */}
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono mb-3">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[10px] font-mono">
         <div className="text-gray-500 uppercase">Donor</div>
         <div className="text-right text-red-300 truncate" title={plan.donor_hospital}>
           {plan.donor_hospital.replace(/\b\w/g, (c) => c.toUpperCase())}
@@ -131,7 +167,7 @@ export default function MissionDetailsPanel({
       </div>
 
       {/* Transport mode + urgency indicator */}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2">
         <span className="text-2xl" title={MODE_LABELS[plan.transport_mode]}>
           {MODE_ICONS[plan.transport_mode]}
         </span>
@@ -144,7 +180,7 @@ export default function MissionDetailsPanel({
       </div>
 
       {/* Max safe time / ETA */}
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono mb-3">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[10px] font-mono">
         <div className="text-gray-500 uppercase">Max safe time</div>
         <div className="text-right text-white">{formatMinutes(plan.max_safe_time_s)}</div>
         <div className="text-gray-500 uppercase">ETA</div>
@@ -153,7 +189,7 @@ export default function MissionDetailsPanel({
 
       {/* Mission progress bar (optional) */}
       {typeof tripProgressPercent === 'number' && (
-        <div className="mb-3">
+        <div>
           <div className="flex justify-between text-[9px] text-gray-500 font-mono uppercase mb-1">
             <span>Trip progress</span>
             <span>{Math.round(tripProgressPercent)}%</span>
@@ -169,7 +205,7 @@ export default function MissionDetailsPanel({
 
       {/* Alerts */}
       {plan.alerts && plan.alerts.length > 0 && (
-        <div className="mt-3 space-y-1.5">
+        <div className="space-y-2">
           {plan.alerts.slice(0, 2).map((a, i) => (
             <div
               key={a.id || i}
@@ -186,5 +222,6 @@ export default function MissionDetailsPanel({
         </div>
       )}
     </div>
+    </>
   );
 }

@@ -6,7 +6,8 @@ import AIAssistant from './components/panels/AIAssistant';
 import PatientVitals from './components/panels/PatientVitals';
 import Navigation from './components/panels/Navigation';
 import HospitalInfo from './components/panels/HospitalInfo';
-import MissionDetailsPanel, { type OrganPlanSummary } from './components/panels/MissionDetailsPanel';
+import { type OrganPlanSummary } from './components/panels/MissionDetailsPanel';
+import MissionStatusCard from './components/MissionStatusCard';
 import AITransparency from './pages/AITransparency';
 
 const api = axios.create({ baseURL: (import.meta as any).env?.VITE_API_BASE || '' });
@@ -41,6 +42,15 @@ class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 
 // Hash-based routing: #/ai-transparency shows AI Transparency page
 const getCurrentView = () => window.location.hash === '#/ai-transparency' ? 'ai-transparency' : 'dashboard';
+
+type DashboardPanelId = 'ai' | 'hospital' | 'nav' | 'vitals' | null;
+
+const NAV_RAIL_ITEMS: { id: DashboardPanelId; label: string; icon: string; aria: string }[] = [
+  { id: 'ai', label: 'AI', icon: '◆', aria: 'AI Assistant' },
+  { id: 'hospital', label: 'H', icon: '▣', aria: 'Receiving Facility' },
+  { id: 'nav', label: 'N', icon: '◈', aria: 'Navigation' },
+  { id: 'vitals', label: 'V', icon: '◇', aria: 'Patient Vitals' },
+];
 
 // --- MAIN APPLICATION ---
 function App() {
@@ -144,7 +154,14 @@ function App() {
   };
 
   return (
-    <div className={`w-screen h-screen overflow-hidden flex flex-col transition-all duration-700 ${isRedAlert ? 'bg-[#050505]' : 'bg-[#050505]'}`}>
+    <div className="app-shell-bg w-screen h-screen overflow-hidden flex flex-col transition-all duration-700 relative">
+      {/* Layered background: vignette + grid (no layout change) */}
+      <div className="app-shell-vignette absolute inset-0 z-0 pointer-events-none" aria-hidden />
+      <div
+        className="absolute inset-0 z-0 pointer-events-none opacity-[0.06]"
+        style={{ backgroundImage: 'linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px)', backgroundSize: '40px 40px' }}
+        aria-hidden
+      />
 
       {showWelcome && <WelcomeScreen onComplete={() => setShowWelcome(false)} />}
 
@@ -158,12 +175,14 @@ function App() {
         </div>
       )}
 
-      <header className="h-14 shrink-0 border-b border-white/10 bg-black/50 backdrop-blur-lg flex items-center justify-between px-6 z-50">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold tracking-tighter text-white uppercase">
-            <span className="text-red-400">Vital</span>Path <span className="text-red-400 text-sm font-normal tracking-widest ml-2">// CARGO MONITOR</span>
+      <header className="app-shell-header h-14 shrink-0 flex items-center justify-between px-6 z-50 relative">
+        <div className="flex items-center gap-5">
+          <h1 className="text-2xl font-semibold tracking-tight uppercase flex items-baseline">
+            <span className="text-red-500 font-bold">Vital</span>
+            <span className="text-white/85 font-medium ml-0.5">Path</span>
+            <span className="text-white/60 text-sm font-normal tracking-widest ml-2">// CARGO MONITOR</span>
           </h1>
-          <nav className="flex items-center gap-2 ml-4">
+          <nav className="flex items-center gap-2 ml-1">
             <a
               href="#/"
               onClick={(e) => { e.preventDefault(); window.location.hash = ''; setCurrentView('dashboard'); }}
@@ -187,20 +206,22 @@ function App() {
         </div>
 
         <div className="flex items-center gap-6">
-          <div className="text-right">
-            <div className="text-white font-mono text-sm">{time.toLocaleTimeString([], { hour12: false })}</div>
-            <div className="text-gray-500 text-[10px] font-mono uppercase">{time.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+          <div className="text-right font-mono tabular-nums">
+            <div className="text-white text-sm tracking-wide">{time.toLocaleTimeString([], { hour12: false })}</div>
+            <div className="text-gray-500 text-[10px] uppercase tracking-wider">{time.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
           </div>
 
           <button
             onClick={() => {
-              // PRIME AUDIO CONTEXT
               const silence = new Audio();
               silence.play().catch(() => { });
               setIsRedAlert(!isRedAlert);
               setAudioError(false);
             }}
-            className={`px-4 py-1 rounded border font-mono text-xs transition-all ${isRedAlert ? 'bg-amber-500 text-black border-amber-400 animate-pulse shadow-[0_0_15px_rgba(234,179,8,0.5)]' : 'bg-transparent text-gray-400 border-gray-700 hover:border-white'}`}
+            className={`app-shell-status-btn px-4 py-1.5 rounded border font-mono text-xs font-medium transition-all ${isRedAlert
+              ? 'bg-amber-600 text-amber-50 border-amber-500/70 shadow-[0_0_14px_var(--alert-amber-rgba-20)]'
+              : 'bg-[var(--standby-bg)] text-gray-300 border-[var(--standby-border)] hover:border-white/25 shadow-[0_0_10px_var(--standby-accent)]'
+            }`}
           >
             {isRedAlert ? '⚠ CARGO ALERT' : 'STANDBY'}
           </button>
@@ -213,15 +234,6 @@ function App() {
         ) : (
         <div className="flex-1 min-h-0 p-4 grid grid-cols-12 gap-4">
         <div className="col-span-3 flex flex-col gap-4 h-full min-h-0 overflow-y-auto">
-          <MissionDetailsPanel
-            className="shrink-0"
-            plan={organPlan}
-            tripProgressPercent={
-              navData?.total_distance_m != null && navData.total_distance_m > 0
-                ? ((navData.total_distance_m - navData.remaining_distance_m) / navData.total_distance_m) * 100
-                : undefined
-            }
-          />
           <AIAssistant
             ref={aiRef}
             className={`shrink-0 transition-all duration-500 border-red-500/30 shadow-[0_0_40px_rgba(239,68,68,0.2)] ${isRedAlert ? 'shadow-[0_0_60px_rgba(234,179,8,0.4)]' : ''}`}
@@ -230,7 +242,6 @@ function App() {
         </div>
 
         <div className="col-span-6 h-full relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black/20">
-          {/* SYNC: Passing activeScenario to Map for 3D Driver View */}
           <MapErrorBoundary>
             <LiveMap
               activeScenario={activeScenario}
@@ -240,6 +251,16 @@ function App() {
               onScenarioClear={handleScenarioClear}
             />
           </MapErrorBoundary>
+          <MissionStatusCard
+            organPlan={organPlan}
+            isRedAlert={isRedAlert}
+            etaRemainingS={navData?.eta_remaining_s}
+            tripProgressPercent={
+              navData?.total_distance_m != null && navData.total_distance_m > 0
+                ? ((navData.total_distance_m - navData.remaining_distance_m) / navData.total_distance_m) * 100
+                : undefined
+            }
+          />
           <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-black/80 to-transparent pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
         </div>
@@ -257,10 +278,6 @@ function App() {
         </div>
         )}
       </main>
-
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-5"
-        style={{ backgroundImage: 'linear-gradient(#333 1px, transparent 1px), linear-gradient(90deg, #333 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
-      </div>
     </div>
   );
 }
