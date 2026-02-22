@@ -126,26 +126,16 @@ function App() {
     setIsRedAlert(scenario.isRedAlert);
     setActiveScenario(scenario);
 
-    // 1. DETERMINE FILE NAME (alert tone for cargo-risk scenarios)
-    const fileName = scenario.isRedAlert ? 'trauma.mp3' : 'routine.mp3';
-
-    // 2. CONSTRUCT WEB PATH
-    const audioPath = `/audio/${fileName}`;
-
-    // 3. PLAY AUDIO WITH EXPLICIT PLAYBACK
-    const audio = new Audio(audioPath);
-    audio.volume = 1.0;
-    audio.play()
-      .then(() => {
-        console.log(`VitalPath AI V-SYNC: Playing local file ${audioPath}`);
-        setAudioError(false);
-      })
-      .catch(e => {
-        console.error(`VOICE ERROR: Audio blocked. Click the header button to prime audio.`, e);
+    // 1. SPEAK via ElevenLabs TTS (dynamic, no static mp3)
+    const phrase = scenario.spokenPhrase ?? scenario.aiPrompt;
+    if (aiRef.current?.speak) {
+      aiRef.current.speak(phrase).catch((e: any) => {
+        console.error('Voice playback failed:', e);
         setAudioError(true);
       });
+    }
 
-    // 4. INJECT MESSAGE INTO AI BRAIN
+    // 2. INJECT MESSAGE INTO AI BRAIN (chat display only, no duplicate speech)
     if (aiRef.current) {
       aiRef.current.injectSystemMessage(scenario.aiPrompt, false);
     }
