@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import VitalPathLogo from '../assets/VITALPATHLOGO.png';
 
 interface WelcomeScreenProps {
     onComplete: () => void;
@@ -13,11 +14,21 @@ const MISSION_LINES = [
 
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
     const [exiting, setExiting] = useState(false);
+    const [transitionStage, setTransitionStage] = useState<'idle' | 'pulse' | 'fade'>('idle');
+    const timeoutsRef = useRef<number[]>([]);
+
+    useEffect(() => {
+        return () => {
+            timeoutsRef.current.forEach((id) => window.clearTimeout(id));
+        };
+    }, []);
 
     const handleBeginClick = () => {
         if (exiting) return;
         setExiting(true);
-        setTimeout(() => onComplete(), 600);
+        setTransitionStage('pulse');
+        timeoutsRef.current.push(window.setTimeout(() => setTransitionStage('fade'), 2000));
+        timeoutsRef.current.push(window.setTimeout(() => onComplete(), 2400));
     };
 
     return (
@@ -58,6 +69,18 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                 transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
                 style={{ textAlign: 'center', position: 'relative', zIndex: 2 }}
             >
+                <motion.img
+                    src={VitalPathLogo}
+                    alt="VitalPath logo"
+                    animate={transitionStage === 'pulse' ? { opacity: [0.35, 1, 0.35], scale: [0.95, 1.08, 0.95] } : { opacity: 1, scale: 1 }}
+                    transition={transitionStage === 'pulse' ? { duration: 0.6, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.6 }}
+                    style={{
+                        width: 'clamp(120px, 18vw, 200px)',
+                        height: 'auto',
+                        margin: '0 auto 1.2rem',
+                        filter: 'drop-shadow(0 0 25px var(--primary-red-glow-rgba-40))',
+                    }}
+                />
                 <h1
                     style={{
                         fontSize: 'clamp(3rem, 8vw, 6rem)',
@@ -151,7 +174,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                         e.currentTarget.style.boxShadow = 'var(--glow-soft-30)';
                     }}
                 >
-                    {exiting ? '…' : 'Begin'}
+                    {exiting ? 'Initializing…' : 'Begin'}
                 </motion.button>
             </motion.div>
 
@@ -184,6 +207,49 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
                             pointerEvents: 'none',
                         }}
                     />
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {transitionStage !== 'idle' && (
+                    <motion.div
+                        key="transition-overlay"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: transitionStage === 'fade' ? 0 : 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.4, ease: 'easeInOut' }}
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            zIndex: 20,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'linear-gradient(135deg, #050505 0%, #120607 45%, #2a0a0e 70%, #5b0e18 100%)',
+                            overflow: 'hidden',
+                        }}
+                    >
+                        <div
+                            style={{
+                                position: 'absolute',
+                                inset: 0,
+                                backgroundImage: 'radial-gradient(circle at center, rgba(255, 54, 54, 0.25) 0%, rgba(0, 0, 0, 0.9) 60%)',
+                                opacity: 0.9,
+                            }}
+                        />
+                        <motion.img
+                            src={VitalPathLogo}
+                            alt="VitalPath heart monitor"
+                            animate={{ opacity: [0.2, 1, 0.2], scale: [0.9, 1.1, 0.9] }}
+                            transition={{ duration: 0.55, repeat: Infinity, ease: 'easeInOut' }}
+                            style={{
+                                width: 'clamp(160px, 22vw, 260px)',
+                                height: 'auto',
+                                zIndex: 1,
+                                filter: 'drop-shadow(0 0 35px rgba(255, 54, 54, 0.7))',
+                            }}
+                        />
+                    </motion.div>
                 )}
             </AnimatePresence>
         </motion.div>

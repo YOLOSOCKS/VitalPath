@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from google import genai
 from pydantic import BaseModel
 from typing import Optional, Any, Dict
+import anyio
 
 # Load .env from several possible locations (backend dir, cwd, cwd/backend; also .env.txt on Windows)
 _backend_dir = Path(__file__).resolve().parent.parent.parent
@@ -31,6 +32,7 @@ _raw = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
 API_KEY = _raw.strip().strip('"').strip("'").replace("\ufeff", "").strip() or None
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_TIMEOUT_S = float(os.getenv("GEMINI_TIMEOUT_S", "12"))
 
 # Initialize the modern client
 client = genai.Client(api_key=API_KEY) if API_KEY else None
@@ -53,23 +55,38 @@ class ChatRequest(BaseModel):
     context: str = "general"
 
 
+async def _generate_with_timeout(prompt: str, system_instruction: str) -> str:
+    def _call():
+        return client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config={"system_instruction": system_instruction},
+        )
+
+    try:
+        with anyio.fail_after(GEMINI_TIMEOUT_S):
+            response = await anyio.to_thread.run_sync(_call)
+        return response.text or ""
+    except (anyio.exceptions.TimeoutError, TimeoutError):
+        return "GEMINI TIMEOUT: Response took too long."
+    except Exception as e:
+        return f"GEMINI ERROR: {str(e)}"
+
+
 async def get_ai_response(request: ChatRequest):
     if not client:
         return {"response": "Cargo Guardian needs a Gemini API key."}
 
     try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=request.message,
-            config={
-                "system_instruction": (
-                    "You are VitalPath AI for organ and critical medical cargo transport. "
-                    "Respond only with short, action-oriented commands. Use imperative sentences like: 'Check container temp.', 'Adjust route.', 'Verify lid seal.' "
-                    "No long explanations, no extra context, no bullet lists. One or two brief commands per response. Cold-chain, cargo viability, and next steps only."
-                )
-            },
+        text = await _generate_with_timeout(
+            request.message,
+            (
+                "You are VitalPath AI for organ and critical medical cargo transport. "
+                "Respond only with short, action-oriented commands. Use imperative sentences like: 'Check container temp.', 'Adjust route.', 'Verify lid seal.' "
+                "No long explanations, no extra context, no bullet lists. One or two brief commands per response. Cold-chain, cargo viability, and next steps only."
+            ),
         )
-        return {"response": response.text or ""}
+        return {"response": text}
     except Exception as e:
         return {"response": f"GEMINI ERROR: {str(e)}"}
 
@@ -119,14 +136,10 @@ async def get_cargo_integrity_response(req: CargoIntegrityRequest):
         f"Notes: {req.optional_notes}" if req.optional_notes else "",
     )
     try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config={
-                "system_instruction": "You are VitalPath cargo integrity advisor. Cold-chain 2–8°C; minimal shock; lid must stay closed. Be concise.",
-            },
-        )
-        text = (response.text or "").strip()
+        text = (await _generate_with_timeout(
+            prompt,
+            "You are VitalPath cargo integrity advisor. Cold-chain 2–8°C; minimal shock; lid must stay closed. Be concise.",
+        )).strip()
         status = _derive_status(text)
         return {"response": text, "integrity_status": status}
     except Exception as e:
@@ -149,14 +162,10 @@ async def get_risk_evaluate_response(req: RiskEvaluateRequest):
         req.scenario_type,
     )
     try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config={
-                "system_instruction": "You are VitalPath risk advisor. Consider cold-chain, shock, lid, battery, and time windows. Be concise.",
-            },
-        )
-        text = (response.text or "").strip()
+        text = (await _generate_with_timeout(
+            prompt,
+            "You are VitalPath risk advisor. Consider cold-chain, shock, lid, battery, and time windows. Be concise.",
+        )).strip()
         risk_level = _derive_status(text)
         return {"response": text, "risk_level": risk_level}
     except Exception as e:

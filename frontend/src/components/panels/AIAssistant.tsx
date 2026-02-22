@@ -208,6 +208,22 @@ const AIAssistant = forwardRef(({ className, isOpen: controlledOpen, onToggle: c
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
+    const extractField = (text: string, keys: string[]) => {
+      const lines = text.split(/\r?\n/);
+      for (const line of lines) {
+        for (const key of keys) {
+          const match = line.match(new RegExp(`\\b${key}\\b\\s*[:\\-]\\s*(.+)`, 'i'));
+          if (match?.[1]) return match[1].trim();
+        }
+      }
+      return null;
+    };
+
+    const location = extractField(input, ['location', 'address', 'loc']);
+    if (location) {
+      window.dispatchEvent(new CustomEvent('vitalpath:ai-dispatch', { detail: { location } }));
+    }
+
     const userMsg: Message = { 
       role: 'user', 
       text: input.toUpperCase(), 

@@ -1,36 +1,34 @@
-import math
 import os
-from typing import Any, Dict, List, Tuple
+from pathlib import Path
+from typing import Any, Dict, List
 
-import httpx
+import requests
+from dotenv import load_dotenv
 
+_backend_dir = Path(__file__).resolve().parent.parent.parent
+load_dotenv(_backend_dir / ".env")
 
-GOOGLE_ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
-
-
-def _parse_duration_seconds(duration: str) -> float:
-    if not duration:
-        return 0.0
-    if duration.endswith("s"):
-        duration = duration[:-1]
-    try:
-        return float(duration)
-    except ValueError:
-        return 0.0
+GOOGLE_MAPS_SERVER_KEY = os.getenv("GOOGLE_MAPS_SERVER_KEY")
 
 
-def _decode_polyline(encoded: str) -> List[Tuple[float, float]]:
+def _require_key() -> str:
+    if not GOOGLE_MAPS_SERVER_KEY:
+        raise RuntimeError("Missing GOOGLE_MAPS_SERVER_KEY in backend/.env")
+    return GOOGLE_MAPS_SERVER_KEY
+
+
+def _decode_polyline(encoded: str) -> List[Dict[str, float]]:
     if not encoded:
         return []
-    points: List[Tuple[float, float]] = []
     index = 0
     lat = 0
     lng = 0
+    coords: List[Dict[str, float]] = []
     length = len(encoded)
 
     while index < length:
-        shift = 0
         result = 0
+        shift = 0
         while True:
             b = ord(encoded[index]) - 63
             index += 1
@@ -38,11 +36,11 @@ def _decode_polyline(encoded: str) -> List[Tuple[float, float]]:
             shift += 5
             if b < 0x20:
                 break
-        dlat = ~(result >> 1) if (result & 1) else (result >> 1)
-        lat += dlat
+        delta_lat = ~(result >> 1) if (result & 1) else (result >> 1)
+        lat += delta_lat
 
-        shift = 0
         result = 0
+        shift = 0
         while True:
             b = ord(encoded[index]) - 63
             index += 1
@@ -50,122 +48,67 @@ def _decode_polyline(encoded: str) -> List[Tuple[float, float]]:
             shift += 5
             if b < 0x20:
                 break
-        dlng = ~(result >> 1) if (result & 1) else (result >> 1)
-        lng += dlng
+        delta_lng = ~(result >> 1) if (result & 1) else (result >> 1)
+        lng += delta_lng
 
-        points.append((lat / 1e5, lng / 1e5))
+        coords.append({"lat": lat / 1e5, "lng": lng / 1e5})
 
-    return points
-
-
-def _haversine_m(a: Tuple[float, float], b: Tuple[float, float]) -> float:
-    lat1, lng1 = a
-    lat2, lng2 = b
-    r = 6371000.0
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlmb = math.radians(lng2 - lng1)
-    x = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2) ** 2
-    return 2.0 * r * math.asin(min(1.0, math.sqrt(x)))
+    return coords
 
 
-async def compute_google_route(
-    start: Dict[str, float],
-    end: Dict[str, float],
-    travel_mode: str = "DRIVE",
-    routing_preference: str = "TRAFFIC_AWARE",
+async def compute_route(
+    from_lat: float,
+    from_lng: float,
+    to_lat: float,
+    to_lng: float,
+    traffic: bool = True,
 ) -> Dict[str, Any]:
-    api_key = os.getenv("GOOGLE_MAPS_SERVER_KEY")
-    if not api_key:
-        raise RuntimeError("Missing GOOGLE_MAPS_SERVER_KEY in backend/.env")
-
+    key = _require_key()
+    url = "https://routes.googleapis.com/directions/v2:computeRoutes"
     headers = {
         "Content-Type": "application/json",
-        "X-Goog-Api-Key": api_key,
+        "X-Goog-Api-Key": key,
         "X-Goog-FieldMask": (
-            "routes.duration,"
-            "routes.distanceMeters,"
+            "routes.duration,routes.distanceMeters,"
             "routes.polyline.encodedPolyline,"
             "routes.legs.steps.navigationInstruction,"
             "routes.legs.steps.distanceMeters"
         ),
     }
-
     body = {
-        "origin": {"location": {"latLng": {"latitude": start["lat"], "longitude": start["lng"]}}},
-        "destination": {"location": {"latLng": {"latitude": end["lat"], "longitude": end["lng"]}}},
-        "travelMode": travel_mode,
-        "routingPreference": routing_preference,
+        "origin": {"location": {"latLng": {"latitude": from_lat, "longitude": from_lng}}},
+        "destination": {"location": {"latLng": {"latitude": to_lat, "longitude": to_lng}}},
+        "travelMode": "DRIVE",
+        "routingPreference": "TRAFFIC_AWARE" if traffic else "TRAFFIC_UNAWARE",
     }
-
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        res = await client.post(GOOGLE_ROUTES_URL, headers=headers, json=body)
-    if res.status_code != 200:
-        raise RuntimeError(res.text)
-
-    data = res.json()
+    r = requests.post(url, headers=headers, json=body, timeout=20)
+    if r.status_code != 200:
+        raise RuntimeError(r.text)
+    data = r.json()
     routes = data.get("routes") or []
     if not routes:
-        raise RuntimeError("Google Routes API returned no routes.")
+        return {"path_coordinates": [], "total_distance_m": 0, "total_time_s": 0, "steps": []}
 
-    route = routes[0]
-    encoded = route.get("polyline", {}).get("encodedPolyline", "")
-    decoded = _decode_polyline(encoded)
-    if not decoded:
-        raise RuntimeError("Google Routes API returned empty polyline.")
+    route0 = routes[0]
+    encoded = (route0.get("polyline") or {}).get("encodedPolyline", "")
+    legs = route0.get("legs") or []
+    leg0 = legs[0] if legs else {}
+    steps_out = []
+    for step in leg0.get("steps") or []:
+        instruction = (step.get("navigationInstruction") or {}).get("instructions") or ""
+        steps_out.append({"instruction": instruction, "distance_m": step.get("distanceMeters")})
 
-    # decoded is list of (lat, lng); convert to [lng, lat]
-    path_coordinates: List[List[float]] = [[lng, lat] for lat, lng in decoded]
-
-    total_distance_m = float(route.get("distanceMeters") or 0.0)
-    total_time_s = _parse_duration_seconds(route.get("duration", ""))
-
-    cum_distance_m: List[float] = [0.0]
-    for i in range(1, len(decoded)):
-        seg = _haversine_m(decoded[i - 1], decoded[i])
-        cum_distance_m.append(cum_distance_m[-1] + seg)
-
-    if total_distance_m <= 0:
-        total_distance_m = cum_distance_m[-1] if cum_distance_m else 0.0
-
-    cum_time_s: List[float] = []
-    if total_distance_m > 0 and total_time_s > 0:
-        for d in cum_distance_m:
-            cum_time_s.append((d / total_distance_m) * total_time_s)
-    else:
-        cum_time_s = [0.0 for _ in cum_distance_m]
-
-    steps_out: List[Dict[str, Any]] = []
-    steps_in = (route.get("legs") or [{}])[0].get("steps") or []
-    step_cursor = 0.0
-    for idx, step in enumerate(steps_in):
-        distance_m = float(step.get("distanceMeters") or 0.0)
-        nav = step.get("navigationInstruction") or {}
-        instruction = nav.get("instructions") or "Proceed"
-        maneuver = nav.get("maneuver")
-        maneuver = (str(maneuver).lower() if maneuver else "continue")
-        if idx == 0:
-            maneuver = "depart"
-        steps_out.append(
-            {
-                "id": idx,
-                "instruction": instruction,
-                "street": instruction,
-                "start_distance_m": step_cursor,
-                "end_distance_m": step_cursor + distance_m,
-                "maneuver": maneuver,
-            }
-        )
-        step_cursor += distance_m
+    duration_s = 0
+    duration_raw = route0.get("duration")
+    if isinstance(duration_raw, str) and duration_raw.endswith("s"):
+        try:
+            duration_s = int(float(duration_raw[:-1]))
+        except ValueError:
+            duration_s = 0
 
     return {
-        "path_coordinates": path_coordinates,
-        "cum_distance_m": cum_distance_m,
-        "cum_time_s": cum_time_s,
-        "total_distance_m": total_distance_m,
-        "total_time_s": total_time_s,
+        "path_coordinates": _decode_polyline(encoded),
+        "total_distance_m": route0.get("distanceMeters") or 0,
+        "total_time_s": duration_s,
         "steps": steps_out,
-        "snapped_start": [start["lng"], start["lat"]],
-        "snapped_end": [end["lng"], end["lat"]],
     }

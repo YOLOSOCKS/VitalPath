@@ -62,11 +62,13 @@ export default function AlgoRaceMiniMap({
   visible,
   benchmark,
   onRunBenchmark,
+  onExpandedChange,
 }: {
   data: AlgoRaceData | null;
   visible: boolean;
   benchmark?: BenchmarkState | null;
   onRunBenchmark?: (trials?: number) => void;
+  onExpandedChange?: (expanded: boolean) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -95,10 +97,13 @@ export default function AlgoRaceMiniMap({
     }
   };
 
-  // Reset expansion when hidden
+  // Reset expansion when hidden; notify parent so other windows can restore
   useEffect(() => {
-    if (!visible) setExpanded(false);
-  }, [visible]);
+    if (!visible) {
+      setExpanded(false);
+      onExpandedChange?.(false);
+    }
+  }, [visible, onExpandedChange]);
 
   // Derived stats (safe even when data is null)
   const stats = useMemo(() => {
@@ -594,7 +599,10 @@ export default function AlgoRaceMiniMap({
             <button
               className="p-1 rounded border border-white/10 bg-black/60 hover:bg-black/80 text-gray-200"
               title="Expand (Bloomberg view)"
-              onClick={() => setExpanded(true)}
+              onClick={() => {
+                setExpanded(true);
+                onExpandedChange?.(true);
+              }}
             >
               <Maximize2 size={14} />
             </button>
@@ -603,7 +611,10 @@ export default function AlgoRaceMiniMap({
               <button
                 className="p-1 rounded border border-white/10 bg-black/60 hover:bg-black/80 text-gray-200"
                 title="Minimize"
-                onClick={() => setExpanded(false)}
+                onClick={() => {
+                  setExpanded(false);
+                  onExpandedChange?.(false);
+                }}
               >
                 <Minimize2 size={14} />
               </button>
@@ -611,9 +622,8 @@ export default function AlgoRaceMiniMap({
                 className="p-1 rounded border border-white/10 bg-black/60 hover:bg-black/80 text-gray-200"
                 title="Close"
                 onClick={() => {
-                  // If you want to fully close it, the parent controls visible.
-                  // Here we just minimize for a smoother UX.
                   setExpanded(false);
+                  onExpandedChange?.(false);
                 }}
               >
                 <X size={14} />

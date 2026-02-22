@@ -48,12 +48,12 @@ class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 const getCurrentView = () => window.location.hash === '#/ai-transparency' ? 'ai-transparency' : 'dashboard';
 
 const MODULE_IDS: ModuleSlot[] = ['ai', 'hospital', 'nav', 'vitals'];
-const MODULE_LABELS: Record<ModuleSlot, string> = { ai: 'AI Assistant', hospital: 'Receiving Facility', nav: 'Navigation', vitals: 'Patient Vitals' };
+const MODULE_LABELS: Record<ModuleSlot, string> = { ai: 'AI Assistant', hospital: 'Receiving Facility', nav: 'Navigation', vitals: 'Cargo Status' };
 const MODULE_ICONS: Record<ModuleSlot, string> = { ai: '◆', hospital: '▣', nav: '◈', vitals: '◇' };
 
 type ModuleState = { open: boolean; minimized: boolean; collapsed: boolean };
 const initialModuleState = (): Record<ModuleSlot, ModuleState> =>
-  MODULE_IDS.reduce((acc, id) => ({ ...acc, [id]: { open: true, minimized: true, collapsed: false } }), {} as Record<ModuleSlot, ModuleState>);
+  MODULE_IDS.reduce((acc, id) => ({ ...acc, [id]: { open: true, minimized: false, collapsed: false } }), {} as Record<ModuleSlot, ModuleState>);
 
 // --- MAIN APPLICATION ---
 function App() {
@@ -89,12 +89,18 @@ function App() {
   const missionElapsedRef = useRef(0);
   const organPlanRef = useRef(organPlan);
   const activeEventsRef = useRef<InjectedEvent[]>([]);
+  const isAirScenarioRef = useRef(false);
   missionElapsedRef.current = missionElapsedS;
   organPlanRef.current = organPlan;
   activeEventsRef.current = activeScenarioEvents;
 
   const setModule = (id: ModuleSlot, patch: Partial<ModuleState>) => {
     setModuleState((s) => ({ ...s, [id]: { ...s[id], ...patch } }));
+  };
+  const setAllModulesMinimized = (minimized: boolean) => {
+    setModuleState((s) =>
+      MODULE_IDS.reduce((next, id) => ({ ...next, [id]: { ...s[id], minimized } }), { ...s })
+    );
   };
   const toggleModule = (id: ModuleSlot) => setModule(id, { minimized: !moduleState[id].minimized });
   const minimizedOrder = MODULE_IDS.filter((id) => moduleState[id].minimized);
@@ -213,7 +219,10 @@ function App() {
     aiRef.current?.injectSystemMessage(msg, false);
   }, [vehicleStuck]);
   useEffect(() => {
-    if (!vehicleStuck) prevVehicleStuckRef.current = false;
+    if (!vehicleStuck) {
+      prevVehicleStuckRef.current = false;
+      setRideStoppedForAssist(false); // resume ride when reroute is applied and vehicle unstuck
+    }
   }, [vehicleStuck]);
 
   // Mission timer: elapsed seconds while scenario is active (stops when mission ends)
@@ -260,6 +269,7 @@ function App() {
   }, [activeScenario, scenarioType, activeScenarioEvents]);
 
   const handleScenarioInject = (scenario: any) => {
+    isAirScenarioRef.current = false;
     setActiveScenario(scenario);
     setScenarioType(scenario.scenario_type ?? ((scenario.title || 'ROUTINE').replace(/\s*\/\/.*$/, '').trim() || 'ROUTINE'));
     setMissionElapsedS(0);
@@ -313,6 +323,7 @@ function App() {
   };
 
   const handleScenarioClear = () => {
+    isAirScenarioRef.current = false;
     setIsRedAlert(false);
     setRideStoppedForAssist(false);
     setActiveScenario(null);
@@ -399,6 +410,26 @@ function App() {
                 simPaused={rideStoppedForAssist}
                 onRerouteStart={() => { aiRef.current?.speak?.('Rerouting due to roadblock. Calculating alternate route.').catch(() => {}); aiRef.current?.injectSystemMessage?.('Rerouting due to roadblock. Calculating alternate route.', false); }}
                 onRerouteComplete={() => { aiRef.current?.speak?.('Reroute complete. Resuming to destination.').catch(() => {}); aiRef.current?.injectSystemMessage?.('Reroute complete. Resuming to destination.', false); }}
+                onAlgoRaceExpandedChange={(expanded) => {
+                  setAllModulesMinimized(expanded);
+                }}
+                onAirRouteStart={() => {
+                  isAirScenarioRef.current = true;
+                  setActiveScenario({ title: 'AIR TRANSPORT', scenario_type: 'ORGAN' });
+                  setScenarioType('ORGAN');
+                  setMissionElapsedS(0);
+                  setBackendTelemetry(null);
+                  setBackendRisk(null);
+                  setBackendAlerts([]);
+                  setActiveScenarioEvents([]);
+                  setAllModulesMinimized(true);
+                }}
+                onAirRouteEnd={() => {
+                  if (isAirScenarioRef.current) {
+                    handleScenarioClear();
+                  }
+                  setAllModulesMinimized(false);
+                }}
               />
             </MapErrorBoundary>
             <EventInjectionPanel
@@ -529,6 +560,25 @@ function App() {
           {rideStoppedForAssist && (
             <div className="fixed left-14 right-0 top-12 z-[98] flex items-center justify-center gap-3 px-4 py-2.5 bg-red-950/95 border-b border-red-500/50 text-red-200 font-mono text-sm">
               <span className="font-bold uppercase tracking-wider">Ride stopped — backup transport requested</span>
+              <button
+                type="button"
+                onClick={() => setRideStoppedForAssist(false)}
+                className="px-3 py-1.5 rounded border border-red-500/60 bg-red-900/60 hover:bg-red-800/80 font-mono text-xs uppercase tracking-wider"
+              >
+                Resume
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRideStoppedForAssist(false);
+                  setMissionElapsedS(0);
+                  setVehicleStuck(false);
+                  setIsRedAlert(false);
+                }}
+                className="px-3 py-1.5 rounded border border-red-500/60 bg-red-900/60 hover:bg-red-800/80 font-mono text-xs uppercase tracking-wider"
+              >
+                Reset
+              </button>
             </div>
           )}
 
