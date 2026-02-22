@@ -1,8 +1,10 @@
 import os
 import requests
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+_backend_dir = Path(__file__).resolve().parent.parent.parent
+load_dotenv(_backend_dir / ".env")
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 # Rachel - American female voice, urgent/expressive delivery
@@ -27,7 +29,7 @@ def generate_voice_stream(text: str):
         "text": text,
         "model_id": "eleven_multilingual_v2", # Optimized for speed and free-tier compatible
         "voice_settings": {
-            "stability": 0.3,
+            "stability": 0.5,
             "similarity_boost": 0.6
         }
     }

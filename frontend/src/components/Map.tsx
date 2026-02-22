@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import axios from 'axios';
 import AlgoRaceMiniMap, { AlgoRaceData } from './AlgoRaceMiniMap';
-import { OSMOWS_LOCATIONS } from '../constants/OsmowsLocations';
+import { theme } from '../styles/theme';
 type LatLng = { lat: number; lng: number };
 
 export type NavLive = {
@@ -26,8 +26,6 @@ type NavStep = {
   end_distance_m: number;
   maneuver: string;
 };
-
-type VehicleMode = 'road' | 'air';
 
 // Mirrors backend app/algorithm/router.py RouteResponse
 type PivotNode = { id: string; lat: number; lng: number; type: string };
@@ -85,18 +83,6 @@ function formatEta(seconds: number): string {
   return `${mm}:${ss.toString().padStart(2, '0')}`;
 }
 
-function haversineM(a: LatLng, b: LatLng): number {
-  const R = 6371000;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const sinDLat = Math.sin(dLat / 2);
-  const sinDLng = Math.sin(dLng / 2);
-  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
 function findIndexByCumTime(cumTime: number[], t: number): number {
   // linear scan is fine at hackathon scale (<10k points)
   let i = 1;
@@ -148,109 +134,12 @@ function computeNavLive(meta: {
   };
 }
 
-// Default center: Washington DC
+// Default center: Washington DC (DMV area)
 const DEFAULT_CENTER = { lat: 38.9072, lng: -77.0369 };
 // Transplant centers, blood banks, distribution
 const HOWARD_UNIV_HOSPITAL = { lat: 38.9185, lng: -77.0195 };
 const GEORGETOWN_UNIV_HOSPITAL = { lat: 38.9114, lng: -77.0726 };
 const UNION_MARKET = { lat: 38.9086, lng: -76.9873 };
-const PHILADELPHIA = { lat: 39.9526, lng: -75.1652 };
-
-const DMV_BOUNDS = {
-  minLat: 38.5,
-  maxLat: 39.2,
-  minLng: -77.6,
-  maxLng: -76.7,
-};
-const AIR_DISTANCE_M = 120_000;
-
-const AMBULANCE_SVG = `
-  <svg id="veh" width="40" height="40" viewBox="0 0 64 64" style="filter: drop-shadow(0 0 10px #00f0ff);">
-    <!-- body -->
-    <rect x="8" y="18" width="48" height="26" rx="6" fill="#1e293b" stroke="#00f0ff" stroke-width="2"/>
-    <!-- cab -->
-    <path d="M44 18 L56 18 Q58 18 58 20 L58 38 L44 38 Z" fill="#0f172a" stroke="#00f0ff" stroke-width="1.5"/>
-    <!-- windshield -->
-    <path d="M46 22 L54 22 Q55 22 55 23 L55 32 L46 32 Z" fill="#38bdf8" opacity="0.5"/>
-    <!-- red cross -->
-    <rect x="20" y="29" width="12" height="3" rx="1" fill="#ef4444"/>
-    <rect x="24.5" y="25" width="3" height="11" rx="1" fill="#ef4444"/>
-    <!-- siren -->
-    <rect x="24" y="13" width="8" height="6" rx="2" fill="#ef4444" opacity="0.9"/>
-    <rect x="24" y="13" width="8" height="6" rx="2" fill="#ef4444" opacity="0.5">
-      <animate attributeName="opacity" values="0.3;1;0.3" dur="0.8s" repeatCount="indefinite"/>
-    </rect>
-    <!-- wheels -->
-    <circle cx="18" cy="44" r="5" fill="#334155" stroke="#00f0ff" stroke-width="1.5"/>
-    <circle cx="18" cy="44" r="2" fill="#00f0ff"/>
-    <circle cx="46" cy="44" r="5" fill="#334155" stroke="#00f0ff" stroke-width="1.5"/>
-    <circle cx="46" cy="44" r="2" fill="#00f0ff"/>
-  </svg>
-`;
-
-const PLANE_SVG = `
-  <svg id="veh-air" width="42" height="42" viewBox="0 0 64 64" style="filter: drop-shadow(0 0 12px #a855f7);">
-    <path d="M6 34 L58 26 L58 30 L6 38 Z" fill="#1f2937" stroke="#a855f7" stroke-width="2"/>
-    <path d="M26 24 L38 12 L42 14 L33 26 Z" fill="#111827" stroke="#a855f7" stroke-width="1.5"/>
-    <path d="M26 40 L38 52 L42 50 L33 38 Z" fill="#111827" stroke="#a855f7" stroke-width="1.5"/>
-    <path d="M8 32 L20 30 L20 34 Z" fill="#60a5fa" opacity="0.6"/>
-    <circle cx="52" cy="28" r="2.4" fill="#ef4444"/>
-  </svg>
-`;
-
-function isOutsideDmv(p: LatLng): boolean {
-  return p.lat < DMV_BOUNDS.minLat || p.lat > DMV_BOUNDS.maxLat || p.lng < DMV_BOUNDS.minLng || p.lng > DMV_BOUNDS.maxLng;
-}
-
-function resolveVehicleMode(start: LatLng, end: LatLng, scenario?: any): VehicleMode {
-  const forced = scenario?.vehicleMode || scenario?.transportMode;
-  if (forced === 'air') return 'air';
-  if (forced === 'road') return 'road';
-  if (isOutsideDmv(start) || isOutsideDmv(end)) return 'air';
-  const distM = haversineM(start, end);
-  return distM > AIR_DISTANCE_M ? 'air' : 'road';
-}
-
-function resolveGeocodeScope(scenario?: any): 'dmv' | 'us' {
-  if (scenario?.geocodeScope === 'us') return 'us';
-  if (scenario?.title && scenario.title.toUpperCase().includes('OUT-OF-STATE')) return 'us';
-  return 'dmv';
-}
-
-function buildAirRoute(start: LatLng, end: LatLng) {
-  const segments = 80;
-  const coords: [number, number][] = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    const lat = start.lat + (end.lat - start.lat) * t;
-    const lng = start.lng + (end.lng - start.lng) * t;
-    coords.push([lng, lat]);
-  }
-
-  const cumDist: number[] = [0];
-  for (let i = 1; i < coords.length; i++) {
-    const a = { lat: coords[i - 1][1], lng: coords[i - 1][0] };
-    const b = { lat: coords[i][1], lng: coords[i][0] };
-    cumDist.push(cumDist[i - 1] + haversineM(a, b));
-  }
-  const totalDist = cumDist[cumDist.length - 1];
-  const airSpeedMps = 230;
-  const cumTime = cumDist.map((d) => d / airSpeedMps);
-  const totalTime = cumTime[cumTime.length - 1];
-  const steps: NavStep[] = [
-    {
-      id: 0,
-      instruction: 'Fly direct to destination',
-      street: 'Air corridor',
-      start_distance_m: 0,
-      end_distance_m: totalDist,
-      maneuver: 'depart',
-    },
-  ];
-
-  return { coords, cumDist, cumTime, totalDist, totalTime, steps, algorithm: 'air' };
-}
-
 // Organ transport TTS phrases (ElevenLabs)
 const ORGAN_TRANSPORT_PHRASE = "Unit 22, organ transport protocol initiated. Priority routing to transplant center. Maintain temperature integrity and sterile containment.";
 const BLOOD_RUN_PHRASE = "Blood run confirmed. Standard medical logistics route active. Estimated arrival on schedule.";
@@ -282,7 +171,7 @@ const SCENARIOS: Record<string, any> = {
     donor_hospital: 'union market',
     recipient_hospital: 'georgetown university hospital',
     organ_type: 'default',
-    aiPrompt: 'Blood products transport. Temperature and seal within spec. No shock events. Proceed to destination; verify handoff protocol on arrival.',
+    aiPrompt: 'Routine blood run. Standard medical logistics. Maintain cold chain.',
     cargoTelemetry: { temperature_c: 3.8, shock_g: 0.3, lid_closed: true, battery_percent: 88, elapsed_time_s: 0 },
     patientOnBoard: false,
   },
@@ -300,19 +189,6 @@ const SCENARIOS: Record<string, any> = {
     cargoTelemetry: { temperature_c: 7.1, shock_g: 1.2, lid_closed: false, battery_percent: 45, elapsed_time_s: 0 },
     patientOnBoard: true,
   },
-  OUT_OF_STATE_REQUEST: {
-    title: 'OUT-OF-STATE REQUEST // AIR LIFT',
-    isRedAlert: false,
-    start: PHILADELPHIA,
-    end: HOWARD_UNIV_HOSPITAL,
-    destName: 'Howard University Hospital — Transplant Center',
-    aiPrompt: 'Out-of-state request received. Air corridor authorized. Maintain cold-chain and expedite handoff on arrival.',
-    cargoTelemetry: { temperature_c: 4.0, shock_g: 0.2, lid_closed: true, battery_percent: 96, elapsed_time_s: 0 },
-    patientOnBoard: true,
-    vehicleMode: 'air',
-    geocodeScope: 'us',
-    manualRoute: true,
-  },
 };
 
 // Transport mode display (from organ plan — no address input)
@@ -324,22 +200,21 @@ export default function LiveMap({
   onNavUpdate,
   onScenarioInject,
   onScenarioClear,
+  showEtaPanel: showEtaPanelProp,
+  onEtaPanelChange,
 }: {
   activeScenario?: any;
-  organPlan?: { transport_mode?: string; eta_total_s?: number; risk_status?: string } | null;
+  organPlan?: { transport_mode?: string; eta_total_s?: number; risk_status?: string; donor_hospital?: string; recipient_hospital?: string } | null;
   onNavUpdate?: (nav: NavLive) => void;
   onScenarioInject?: (s: any) => void;
   onScenarioClear?: () => void;
+  showEtaPanel?: boolean;
+  onEtaPanelChange?: (open: boolean) => void;
 }) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const ambulanceMarker = useRef<maplibregl.Marker | null>(null);
   const destMarker = useRef<maplibregl.Marker | null>(null);
-  const vehicleElRef = useRef<HTMLDivElement | null>(null);
-  const vehicleModeRef = useRef<VehicleMode>('road');
-  const osmowsMarkersRef = useRef<maplibregl.Marker[]>([]);
-  const visitedOsmows = useRef<Set<number>>(new Set());
-
 
 
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([]);
@@ -354,8 +229,10 @@ export default function LiveMap({
   // Algorithm comparison
   const algoRef = useRef<'dijkstra' | 'bmsssp'>('dijkstra');
   const [algoStats, setAlgoStats] = useState<{ dijkstra?: AlgoStats; bmsssp?: AlgoStats }>({});
-  const [showEtaPanel, setShowEtaPanel] = useState(false);
+  const [showEtaPanelLocal, setShowEtaPanelLocal] = useState(false);
   const [isFetchingStats, setIsFetchingStats] = useState(false);
+  const showEtaPanel = showEtaPanelProp ?? showEtaPanelLocal;
+  const setShowEtaPanel = onEtaPanelChange ? (v: boolean) => onEtaPanelChange(v) : setShowEtaPanelLocal;
 
   // UI feedback
   const [isRouting, setIsRouting] = useState(false);
@@ -368,8 +245,6 @@ export default function LiveMap({
 
   const [showAlgoRace, setShowAlgoRace] = useState(false);
   const algoRaceReqIdRef = useRef(0);
-  const [isOsmowsMode, setIsOsmowsMode] = useState(false);
-
   // Dynamic Roadblock Injection
   const [activeRoadblocks, setActiveRoadblocks] = useState<[number, number][]>([]);
   const roadblocksRef = useRef<[number, number][]>([]);
@@ -379,6 +254,27 @@ export default function LiveMap({
   const roadblockStopIdx = useRef<number | null>(null); // route index where to stop
   // Pending reroute: stored here until ambulance reaches the roadblock, then applied
   const pendingRerouteRef = useRef<{ coords: [number, number][]; cumDist: number[]; cumTime: number[]; totalDist: number; totalTime: number; steps: NavStep[]; algorithm: string } | null>(null);
+
+  // When dev panel opens (from nav or in-map), fetch algo stats once; when it closes, hide algo race
+  const prevShowEtaPanelRef = useRef(false);
+  useEffect(() => {
+    if (showEtaPanel && !prevShowEtaPanelRef.current) fetchBothAlgoStats();
+    if (!showEtaPanel) setShowAlgoRace(false);
+    prevShowEtaPanelRef.current = showEtaPanel;
+  }, [showEtaPanel]);
+
+  // Escape closes dev panel (same as Mission Status overlay)
+  useEffect(() => {
+    if (!showEtaPanel) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowEtaPanel(false);
+        setShowAlgoRace(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showEtaPanel]);
 
   // Apply a queued reroute: swap it into routeRef and unfreeze the ambulance
   const applyPendingReroute = () => {
@@ -390,7 +286,7 @@ export default function LiveMap({
     stoppedAtRoadblock.current = false;
     roadblockStopIdx.current = null;
     // Update the route line on the map
-    const src = map.current?.getSource('vitalpath-ai-route') as any;
+    const src = map.current?.getSource('vitalpath-route') as any;
     if (src) {
       src.setData({
         type: 'FeatureCollection',
@@ -446,21 +342,6 @@ export default function LiveMap({
   }, [activeWaypointIdx]);
 
   useEffect(() => {
-    if (!map.current) return;
-    osmowsMarkersRef.current.forEach((m) => m.remove());
-    osmowsMarkersRef.current = [];
-
-    if (isOsmowsMode) {
-      OSMOWS_LOCATIONS.forEach((loc) => {
-        const marker = new maplibregl.Marker({ color: '#ef4444' })
-          .setLngLat([loc.lng, loc.lat])
-          .addTo(map.current!);
-        osmowsMarkersRef.current.push(marker);
-      });
-    }
-  }, [isOsmowsMode]);
-
-  useEffect(() => {
     if (map.current || !mapContainer.current) return;
 
     map.current = new maplibregl.Map({
@@ -471,38 +352,68 @@ export default function LiveMap({
       pitch: 70,
     });
 
-    // Vehicle marker
+    // Vehicle marker with pulsing ring (theme red)
     const el = document.createElement('div');
-    el.className = 'vehicle-marker';
-    el.style.width = '40px';
-    el.style.height = '40px';
-    el.style.display = 'flex';
-    el.style.alignItems = 'center';
-    el.style.justifyContent = 'center';
-    el.style.willChange = 'transform';
-    el.innerHTML = AMBULANCE_SVG;
-    vehicleElRef.current = el;
-
+    el.className = 'ambulance-marker';
+    el.style.cssText = 'position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;will-change:transform';
+    const red = theme.colors.primaryRedGlow;
+    el.innerHTML = `
+      <span class="map-vehicle-pulse-ring" style="position:absolute;width:56px;height:56px;margin-left:0;margin-top:0;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;border:2px solid ${red};opacity:0.35;animation:map-vehicle-pulse 2s ease-in-out infinite;pointer-events:none"></span>
+      <svg id="veh" width="40" height="40" viewBox="0 0 64 64" style="filter: drop-shadow(0 0 10px ${red}); position:relative; z-index:1">
+        <rect x="8" y="18" width="48" height="26" rx="6" fill="#1e293b" stroke="${red}" stroke-width="2"/>
+        <path d="M44 18 L56 18 Q58 18 58 20 L58 38 L44 38 Z" fill="#0f172a" stroke="${red}" stroke-width="1.5"/>
+        <path d="M46 22 L54 22 Q55 22 55 23 L55 32 L46 32 Z" fill="#38bdf8" opacity="0.5"/>
+        <rect x="20" y="29" width="12" height="3" rx="1" fill="${red}"/>
+        <rect x="24.5" y="25" width="3" height="11" rx="1" fill="${red}"/>
+        <rect x="24" y="13" width="8" height="6" rx="2" fill="${red}" opacity="0.9"/>
+        <rect x="24" y="13" width="8" height="6" rx="2" fill="${red}" opacity="0.5">
+          <animate attributeName="opacity" values="0.3;1;0.3" dur="0.8s" repeatCount="indefinite"/>
+        </rect>
+        <circle cx="18" cy="44" r="5" fill="#334155" stroke="${red}" stroke-width="1.5"/>
+        <circle cx="18" cy="44" r="2" fill="${red}"/>
+        <circle cx="46" cy="44" r="5" fill="#334155" stroke="${red}" stroke-width="1.5"/>
+        <circle cx="46" cy="44" r="2" fill="${red}"/>
+      </svg>
+    `;
     ambulanceMarker.current = new maplibregl.Marker({ element: el }).setLngLat([DEFAULT_CENTER.lng, DEFAULT_CENTER.lat]).addTo(map.current);
 
     map.current.on('load', () => {
-      map.current?.addSource('vitalpath-ai-route', {
-        type: 'geojson',
+      map.current?.addSource('vitalpath-route', {        type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       });
 
+      // Route glow (wider, translucent) then main line (thicker + solid)
       map.current?.addLayer({
-        id: 'vitalpath-ai-route-line',
+        id: 'vitalpath-route-glow',
         type: 'line',
-        source: 'vitalpath-ai-route',
+        source: 'vitalpath-route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-width': 6, 'line-color': '#00f0ff', 'line-opacity': 0.85 },
+        paint: { 'line-width': 14, 'line-color': theme.colors.primaryRedGlow, 'line-opacity': 0.22 },
+      });
+      map.current?.addLayer({
+        id: 'vitalpath-route-line',
+        type: 'line',
+        source: 'vitalpath-route',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-width': 8, 'line-color': theme.colors.primaryRedGlow, 'line-opacity': 0.92 },
       });
 
-      // Road closure markers source
+      // Road closure markers source: outer ring + inner circle for distinct look
       map.current?.addSource('road-closures', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
+      });
+      map.current?.addLayer({
+        id: 'road-closures-circle-outer',
+        type: 'circle',
+        source: 'road-closures',
+        paint: {
+          'circle-radius': 14,
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-color': theme.colors.roadblockCircle,
+          'circle-stroke-width': 2.5,
+          'circle-opacity': 0.95,
+        },
       });
       map.current?.addLayer({
         id: 'road-closures-circle',
@@ -510,9 +421,9 @@ export default function LiveMap({
         source: 'road-closures',
         paint: {
           'circle-radius': 10,
-          'circle-color': '#ff4444',
-          'circle-stroke-color': '#ffffff',
-          'circle-stroke-width': 2.5,
+          'circle-color': theme.colors.roadblockCircle,
+          'circle-stroke-color': theme.colors.textPrimary,
+          'circle-stroke-width': 2,
           'circle-opacity': 0.9,
         },
       });
@@ -526,9 +437,7 @@ export default function LiveMap({
           'text-allow-overlap': true,
         },
         paint: {
-          'text-color': '#ffffff',
-
-
+          'text-color': theme.colors.textPrimary,
         },
       });
 
@@ -568,23 +477,6 @@ export default function LiveMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const applyVehicleMode = (mode: VehicleMode) => {
-    if (vehicleModeRef.current === mode) return;
-    vehicleModeRef.current = mode;
-
-    const el = vehicleElRef.current;
-    if (el) {
-      el.innerHTML = mode === 'air' ? PLANE_SVG : AMBULANCE_SVG;
-      el.style.width = mode === 'air' ? '42px' : '40px';
-      el.style.height = mode === 'air' ? '42px' : '40px';
-    }
-
-    if (map.current?.getLayer('vitalpath-ai-route-line')) {
-      const lineColor = mode === 'air' ? '#a855f7' : '#00f0ff';
-      map.current.setPaintProperty('vitalpath-ai-route-line', 'line-color', lineColor);
-    }
-  };
-
   // Re-route on scenario change (auto-start for dispatch scenarios)
   useEffect(() => {
     if (!map.current?.loaded()) return;
@@ -597,8 +489,6 @@ export default function LiveMap({
 
     pendingRerouteRef.current = null;
     if (rerouteIntervalRef.current) { clearInterval(rerouteIntervalRef.current); rerouteIntervalRef.current = null; }
-    visitedOsmows.current.clear();
-
     // Prevent full reset if this is just a status update (e.g. patient pickup)
     if (activeScenario?.title === prevScenarioTitleRef.current && activeScenario?.patientOnBoard !== prevPatientStatusRef.current) {
       prevPatientStatusRef.current = activeScenario?.patientOnBoard;
@@ -634,28 +524,11 @@ export default function LiveMap({
       setRouteReady(false);
       setRouteCoordinates([]);
       if (destMarker.current) { destMarker.current.remove(); destMarker.current = null; }
-      const routeSrc = map.current?.getSource('vitalpath-ai-route') as any;
-      if (routeSrc) routeSrc.setData({ type: 'FeatureCollection', features: [] });
+      const routeSrc = map.current?.getSource('vitalpath-route') as any;      if (routeSrc) routeSrc.setData({ type: 'FeatureCollection', features: [] });
       // --- End cleanup ---
 
       // Determine invalid/initial sequence
       setActiveWaypointIdx(activeScenario.waypoints ? 0 : -1);
-
-      if (activeScenario.manualRoute) {
-        // Manual route selection (e.g. out-of-state request) — do not auto-start.
-        setEndPoint(null);
-        setDestQuery('');
-        if (activeScenario.start && ambulanceMarker.current) {
-          const startLng = activeScenario.start.lng;
-          const startLat = activeScenario.start.lat;
-          ambulanceMarker.current.setLngLat([startLng, startLat]);
-          map.current?.jumpTo({ center: [startLng, startLat], zoom: 16, pitch: 70 });
-          setIsFollowing(true);
-          smoothBearingRef.current = null;
-        }
-        applyVehicleMode(resolveVehicleMode(activeScenario.start || DEFAULT_CENTER, activeScenario.start || DEFAULT_CENTER, activeScenario));
-        return;
-      }
 
       let targetPos = activeScenario.end;
       if (activeScenario.waypoints && activeScenario.waypoints.length > 0) {
@@ -687,99 +560,6 @@ export default function LiveMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeScenario]);
 
-  const applyRouteData = (route: {
-    coords: [number, number][];
-    cumDist: number[];
-    cumTime: number[];
-    totalDist: number;
-    totalTime: number;
-    steps: NavStep[];
-    algorithm?: string;
-  }, snappedStart?: [number, number], snappedEnd?: [number, number], autoStart = false) => {
-    if (!route.coords.length || !route.cumDist.length || !route.cumTime.length) {
-      throw new Error('Route meta missing (coords/cumDist/cumTime).');
-    }
-
-    // Put the marker on the route start
-    const startCoord = snappedStart || route.coords[0];
-    if (ambulanceMarker.current) {
-      ambulanceMarker.current.setLngLat(startCoord);
-    }
-
-    routeRef.current = {
-      coords: route.coords,
-      cumDist: route.cumDist,
-      cumTime: route.cumTime,
-      totalDist: route.totalDist,
-      totalTime: route.totalTime,
-      steps: route.steps,
-      algorithm: route.algorithm,
-    };
-
-    // Place a red pin at the destination
-    if (map.current) {
-      if (destMarker.current) destMarker.current.remove();
-      const destEl = document.createElement('div');
-      destEl.style.width = '32px';
-      destEl.style.height = '32px';
-      destEl.style.display = 'flex';
-      destEl.style.alignItems = 'center';
-      destEl.style.justifyContent = 'center';
-      destEl.innerHTML = `
-        <svg width="32" height="32" viewBox="0 0 24 24" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">
-          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#ef4444" stroke="white" stroke-width="1.2"/>
-          <circle cx="12" cy="9" r="2.5" fill="white"/>
-        </svg>
-      `;
-      const destCoord = snappedEnd || route.coords[route.coords.length - 1];
-      destMarker.current = new maplibregl.Marker({ element: destEl, anchor: 'bottom' })
-        .setLngLat(destCoord)
-        .addTo(map.current);
-    }
-
-    // Draw route line on map (but don't start animation yet)
-    const geojson = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {},
-          geometry: { type: 'LineString', coordinates: route.coords },
-        },
-      ],
-    };
-    const src = map.current?.getSource('vitalpath-ai-route') as any;
-    if (src) src.setData(geojson);
-
-    // Center camera on the route
-    if (map.current) {
-      if (vehicleModeRef.current === 'air') {
-        const start = route.coords[0];
-        const end = route.coords[route.coords.length - 1];
-        map.current.fitBounds([start, end] as any, { padding: 80, pitch: 0, bearing: 0 });
-      } else {
-        map.current.jumpTo({ center: (snappedStart || route.coords[0]) as any });
-      }
-    }
-
-    // Push an initial nav state (shows distance/ETA in HUD before animation starts)
-    const simSpeedup = vehicleModeRef.current === 'air' ? 18 : 8;
-    const initialNav = computeNavLive(
-      { totalDist: route.totalDist, totalTime: route.totalTime, steps: route.steps, algorithm: route.algorithm },
-      0,
-      0,
-      simSpeedup
-    );
-    onNavUpdateRef.current?.(initialNav);
-
-    // If autoStart (e.g. dispatch scenario), begin animation immediately
-    if (autoStart) {
-      setRouteCoordinates(route.coords);
-    } else {
-      setRouteReady(true);  // enable GO button, wait for user click
-    }
-  };
-
   const fetchRoute = async (endOverride?: LatLng, autoStart = false, blockedEdges?: number[][]) => {
     try {
       setIsRouting(true);
@@ -798,16 +578,6 @@ export default function LiveMap({
       const destination = endOverride ?? endPoint;
       if (!destination) {
         setRouteError('Please enter a destination first.');
-        setIsRouting(false);
-        return;
-      }
-
-      const desiredMode = resolveVehicleMode(start, destination, activeScenario);
-      applyVehicleMode(desiredMode);
-
-      if (desiredMode === 'air') {
-        const airRoute = buildAirRoute(start, destination);
-        applyRouteData(airRoute, [start.lng, start.lat], [destination.lng, destination.lat], autoStart);
         setIsRouting(false);
         return;
       }
@@ -840,6 +610,13 @@ export default function LiveMap({
         throw new Error('Route meta missing (coords/cumDist/cumTime). Check backend /calculate response.');
       }
 
+      // Put the marker ON the road network (snapped) so it's not inside buildings.
+      const snapped = res.data.snapped_start;
+      if (snapped && ambulanceMarker.current) {
+        ambulanceMarker.current.setLngLat(snapped);
+      } else if (ambulanceMarker.current) {
+        ambulanceMarker.current.setLngLat(coords[0]);
+      }
       // Store comparison stats for the current algorithm
       const statsEntry: AlgoStats = {
         exec_ms: Number(res.data.execution_time_ms ?? 0),
@@ -848,14 +625,70 @@ export default function LiveMap({
       };
       setAlgoStats((prev) => ({ ...prev, [algoRef.current]: statsEntry }));
 
-      const snapped = res.data.snapped_start;
-      applyRouteData(
-        { coords, cumDist, cumTime, totalDist, totalTime, steps, algorithm: res.data.algorithm },
-        snapped,
-        res.data.snapped_end,
-        autoStart
+      routeRef.current = {
+        coords,
+        cumDist,
+        cumTime,
+        totalDist,
+        totalTime,
+        steps,
+        algorithm: res.data.algorithm,
+      };
+
+      // Place a red pin at the destination
+      if (map.current) {
+        if (destMarker.current) destMarker.current.remove();
+        const destEl = document.createElement('div');
+        destEl.style.width = '32px';
+        destEl.style.height = '32px';
+        destEl.style.display = 'flex';
+        destEl.style.alignItems = 'center';
+        destEl.style.justifyContent = 'center';
+        destEl.innerHTML = `
+          <svg width="32" height="32" viewBox="0 0 24 24" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${theme.colors.primaryRedGlow}" stroke="white" stroke-width="1.2"/>
+            <circle cx="12" cy="9" r="2.5" fill="white"/>
+          </svg>
+        `;
+        const destCoord = res.data.snapped_end || coords[coords.length - 1];
+        destMarker.current = new maplibregl.Marker({ element: destEl, anchor: 'bottom' })
+          .setLngLat(destCoord)
+          .addTo(map.current);
+      }
+
+      // Draw route line on map (but don't start animation yet)
+      const geojson = {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'LineString', coordinates: coords },
+          },
+        ],
+      };
+      const src = map.current?.getSource('vitalpath-route') as any;
+      if (src) src.setData(geojson);
+
+      // Center camera on the route
+      map.current?.jumpTo({ center: (snapped || coords[0]) as any });
+
+      // Push an initial nav state (shows distance/ETA in HUD before animation starts)
+      const simSpeedup = 8;
+      const initialNav = computeNavLive(
+        { totalDist, totalTime, steps, algorithm: res.data.algorithm },
+        0,
+        0,
+        simSpeedup
       );
-    } catch (e: any) {
+      onNavUpdateRef.current?.(initialNav);
+
+      // If autoStart (e.g. dispatch scenario), begin animation immediately
+      if (autoStart) {
+        setRouteCoordinates(coords);
+      } else {
+        setRouteReady(true);  // enable GO button, wait for user click
+      }    } catch (e: any) {
       // Ignore aborted requests
       if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') return;
       console.error('Route fetch failed', e);
@@ -903,7 +736,6 @@ export default function LiveMap({
     routeRef.current = null;
     // Return to standby mode
     onScenarioClear?.();
-    applyVehicleMode('road');
     // Clear roadblock state
     setActiveRoadblocks([]);
     roadblocksRef.current = [];
@@ -915,13 +747,11 @@ export default function LiveMap({
     if (destMarker.current) { destMarker.current.remove(); destMarker.current = null; }
 
     // Clear the route line from the map
-    const src = map.current?.getSource('vitalpath-ai-route') as any;
-    if (src) src.setData({ type: 'FeatureCollection', features: [] });
+    const src = map.current?.getSource('vitalpath-route') as any;    if (src) src.setData({ type: 'FeatureCollection', features: [] });
   };
 
   // Fetch stats for both algorithms (for comparison panel)
   const fetchBothAlgoStats = async () => {
-    if (vehicleModeRef.current === 'air') return;
     setIsFetchingStats(true);
     const cur = ambulanceMarker.current?.getLngLat();
     const start = cur ? { lat: cur.lat, lng: cur.lng } : { lat: DEFAULT_CENTER.lat, lng: DEFAULT_CENTER.lng };
@@ -1290,13 +1120,11 @@ export default function LiveMap({
       setIsRouting(true);
       setRouteError(null);
 
-      // Use autocomplete endpoint and take the first result
-      const scope = resolveGeocodeScope(activeScenario);
-      const res = await api.get('/api/algo/autocomplete', { params: { q: destQuery.trim(), scope } });
+      // Use autocomplete endpoint (DMV area scoped) and take the first result
+      const res = await api.get('/api/algo/autocomplete', { params: { q: destQuery.trim() } });
       const results = res.data?.results || [];
       if (!results.length) {
-        setRouteError(scope === 'dmv' ? 'No addresses found in the DMV area. Try a more specific query.' : 'No addresses found. Try a more specific query.');
-        setIsRouting(false);
+        setRouteError('No addresses found in the DMV area. Try a more specific query.');        setIsRouting(false);
         return;
       }
       const top = results[0];
@@ -1309,10 +1137,7 @@ export default function LiveMap({
       setRouteError(
         e?.response?.data?.detail ||
         e?.message ||
-        (resolveGeocodeScope(activeScenario) === 'dmv'
-          ? 'Geocode failed. Try a more specific address in the DMV area.'
-          : 'Geocode failed. Try a more specific address.')
-      );
+        'Geocode failed. Try a more specific address in the DMV area.'      );
       setIsRouting(false);
     }
   };
@@ -1329,10 +1154,8 @@ export default function LiveMap({
     abortRef.current = controller;
 
     try {
-      const scope = resolveGeocodeScope(activeScenario);
       const res = await api.get('/api/algo/autocomplete', {
-        params: { q: query.trim(), scope },
-        signal: controller.signal,
+        params: { q: query.trim() },        signal: controller.signal,
       });
       const results = res.data?.results || [];
       setSuggestions(results);
@@ -1380,8 +1203,7 @@ export default function LiveMap({
     setCurrentPos(meta.coords[0]);
     setSimRunning(true);
 
-    const SIM_SPEEDUP = vehicleModeRef.current === 'air' ? 18 : 8; // air travels faster than road
-
+    const SIM_SPEEDUP = 8; // demo speed multiplier: increases how fast the vehicle progresses along the real route timebase
     const tick = () => {
       const m = routeRef.current;
       if (!m || !ambulanceMarker.current || !map.current) return;
@@ -1397,12 +1219,10 @@ export default function LiveMap({
         setSimRunning(false);
         // Return to standby mode
         onScenarioClear?.();
-        applyVehicleMode('road');
         // Clear auto-reroute on arrival
         if (rerouteIntervalRef.current) { clearInterval(rerouteIntervalRef.current); rerouteIntervalRef.current = null; }
         // Clear the route line — trip is done
-    const src = map.current?.getSource('vitalpath-ai-route') as any;
-        if (src) src.setData({ type: 'FeatureCollection', features: [] });
+        const src = map.current?.getSource('vitalpath-route') as any;        if (src) src.setData({ type: 'FeatureCollection', features: [] });
         // final nav push
         const finalNav = computeNavLive(
           { totalDist: m.totalDist, totalTime, steps: m.steps, algorithm: m.algorithm },
@@ -1484,10 +1304,9 @@ export default function LiveMap({
       ambulanceMarker.current.setLngLat(pos);
       setCurrentPos(pos);
 
-      // Trim the route line: only show the path AHEAD of the vehicle
+      // Trim the route line: only show the path A of the vehicle
       const remainingCoords: [number, number][] = [pos, ...m.coords.slice(i)];
-      const src = map.current?.getSource('vitalpath-ai-route') as any;
-      if (src) {
+      const src = map.current?.getSource('vitalpath-route') as any;      if (src) {
         src.setData({
           type: 'FeatureCollection',
           features: [{
@@ -1565,160 +1384,60 @@ export default function LiveMap({
 
   return (
     <div className="w-full h-full relative">
+      <style>{`
+        @keyframes map-vehicle-pulse {
+          0%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 0.35; }
+          50% { transform: translate(-50%,-50%) scale(1.15); opacity: 0.2; }
+        }
+      `}</style>
       <div ref={mapContainer} className="w-full h-full rounded-2xl overflow-hidden border border-white/10" />
+      {/* Soft top/bottom gradients for depth */}
+      <div className="absolute inset-x-0 top-0 h-28 pointer-events-none z-[1] bg-gradient-to-b from-black/50 via-black/10 to-transparent rounded-t-2xl" aria-hidden />
+      <div className="absolute inset-x-0 bottom-0 h-28 pointer-events-none z-[1] bg-gradient-to-t from-black/50 via-black/10 to-transparent rounded-b-2xl" aria-hidden />
 
-      {/* HUD: MINIMAL CORNER OVERLAY */}
-      <div className="absolute top-4 left-4 flex flex-col gap-2">
-        <div className="bg-black/80 backdrop-blur-xl p-3 rounded-lg border border-cyan-500/30 flex flex-col gap-1 min-w-[220px]">
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-2 h-2 rounded-full ${activeScenario?.isRedAlert ? 'bg-red-500 animate-pulse' : 'bg-cyan-400'
-                }`}
-            />
-            <span className="text-cyan-400 text-[10px] font-mono font-bold uppercase tracking-tighter">
-              {activeScenario?.title || 'SYSTEM IDLE'}
-            </span>
-          </div>
-          <div className="text-[9px] text-gray-500 font-mono">
-            SHIPMENT // {currentPos ? `${currentPos[0].toFixed(5)}, ${currentPos[1].toFixed(5)}` : '--, --'}
-          </div>
-          {routeRef.current?.totalDist != null && routeRef.current?.totalTime != null && (
-            <div className="text-[9px] text-gray-500 font-mono">
-              ROUTE // {(routeRef.current.totalDist / 1000).toFixed(2)} km // ETA {formatEta(routeRef.current.totalTime)}
-            </div>
-          )}
-          {routeError && <div className="text-[10px] text-red-300 font-mono mt-1 max-w-[300px]">{routeError}</div>}
-        </div>
+      {/* Dev: backdrop (same as Mission Status) when panel open */}
+      {showEtaPanel && (
+        <button
+          type="button"
+          className="fixed inset-0 z-[44] bg-black/20 backdrop-blur-[2px] transition-opacity duration-200"
+          onClick={() => {
+            setShowEtaPanel(false);
+            setShowAlgoRace(false);
+          }}
+          aria-label="Close dev panel"
+        />
+      )}
 
-      </div>
-
-      {/* Transport mode + destination input + controls */}
-      <div className="absolute top-4 right-4 z-50">
-        <div className="bg-black/80 backdrop-blur-xl p-3 rounded-lg border border-white/10 flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            {!activeScenario ? (
-              <span className="text-gray-500 font-mono text-xs px-1">Select a scenario to start</span>
-            ) : (
-              <>
-                {organPlan?.transport_mode && (
-                  <span className="text-lg" title={organPlan.transport_mode}>
-                    {MODE_ICON[organPlan.transport_mode] || '🚗'}
-                  </span>
-                )}
-                <span className="text-cyan-400 font-mono text-xs uppercase tracking-wider">
-                  {organPlan?.transport_mode ?? 'Road'}
-                </span>
-                <span className="text-gray-500 font-mono text-[10px]">
-                  ETA {routeRef.current?.totalTime != null
-                    ? formatEta(routeRef.current.totalTime)
-                    : organPlan?.eta_total_s != null
-                      ? formatEta(organPlan.eta_total_s)
-                      : '--:--'}
-                </span>
-              </>
-            )}
-          </div>
-
-          <div className="flex gap-2 items-center">
-            <div className="relative">
-              <input
-                value={destQuery}
-                onChange={(e) => onInputChange(e.target.value)}
-                placeholder={resolveGeocodeScope(activeScenario) === 'dmv' ? 'Enter address in DMV area' : 'Enter address in the United States'}
-                className="bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white w-64 outline-none focus:border-cyan-500/50 transition-colors"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    setShowSuggestions(false);
-                    if (routeReady) { startAnimation(); return; }
-                    handleGeocode();
-                  }
-                  if (e.key === 'Escape') setShowSuggestions(false);
-                }}
-                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                onBlur={() => { setTimeout(() => setShowSuggestions(false), 200); }}
-              />
-
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-black/95 backdrop-blur-xl border border-cyan-500/30 rounded-lg overflow-hidden shadow-[0_8px_32px_rgba(0,240,255,0.15)]">
-                  {suggestions.map((s, i) => (
-                    <button
-                      key={i}
-                      className="w-full text-left px-3 py-2 text-[11px] text-gray-300 hover:bg-cyan-500/15 hover:text-cyan-200 transition-colors border-b border-white/5 last:border-b-0 flex items-start gap-2"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => handleSelectSuggestion(s)}
-                    >
-                      <span className="text-cyan-500 mt-px shrink-0">📍</span>
-                      <span className="line-clamp-2 leading-tight">{s.display_name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => {
-                setShowSuggestions(false);
-                if (routeReady) {
-                  startAnimation();
-                } else {
-                  handleGeocode();
-                }
-              }}
-              disabled={isRouting || simRunning}
-              className={`px-3 py-1 rounded border text-xs font-mono ${isRouting || simRunning
-                ? 'bg-white/5 border-white/10 text-gray-400 cursor-not-allowed'
-                : routeReady
-                  ? 'bg-green-500/20 border-green-400/40 text-green-300 hover:bg-green-500/30 animate-pulse'
-                  : 'bg-cyan-500/20 border-cyan-400/40 text-cyan-300 hover:bg-cyan-500/30'
-                }`}
-            >
-              {isRouting ? '...' : simRunning ? 'MOVING' : routeReady ? '▶ GO' : 'GO'}
-            </button>
-            <button
-              onClick={() => setIsFollowing((v) => !v)}
-              className={`px-2 py-1 rounded border text-xs font-mono ${isFollowing ? 'border-cyan-400/50 text-cyan-300' : 'border-white/10 text-gray-400'}`}
-            >
-              {isFollowing ? 'FOLLOW' : 'FREE'}
-            </button>
-            {(simRunning || isRouting) && (
-              <button
-                onClick={cancelRoute}
-                className="px-2 py-1 rounded border text-xs font-mono bg-red-500/20 border-red-400/40 text-red-300 hover:bg-red-500/30 transition-colors"
-                title="Cancel route"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom-left Dev panel */}
-      <div className="absolute bottom-4 left-4 z-50 flex flex-col items-start gap-2">
-        {showEtaPanel && (
-          <div className="bg-black/90 backdrop-blur-xl p-4 rounded-lg border border-cyan-500/30 min-w-[300px] flex flex-col gap-3 shadow-[0_0_30px_rgba(0,240,255,0.1)]">
+      {/* Dev panel: stays centered at ~39%; button is moved in (left) */}
+      {showEtaPanel && (
+        <div
+          className="absolute bottom-4 left-[39%] -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none"
+          aria-hidden
+        >
+          <div
+            className="map-hud-panel bg-black/40 backdrop-blur-xl p-4 rounded-xl border border-white/10 min-w-[300px] flex flex-col gap-3 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-10)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] z-[45] pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Algorithm Comparison */}
             <div>
-              <div className="text-[10px] text-cyan-400 font-mono font-bold uppercase tracking-wider mb-2">Algorithm Comparison</div>
-              {isFetchingStats ? (
+              <div className="text-[10px] text-red-400 font-mono font-bold uppercase tracking-wider mb-2">Algorithm Comparison</div>              {isFetchingStats ? (
                 <div className="text-[9px] text-gray-400 font-mono animate-pulse">Fetching both routes...</div>
               ) : (
                 <div className="grid grid-cols-3 gap-1 text-[9px] font-mono">
                   <div className="text-gray-500"></div>
-                  <div className="text-cyan-300 text-center">DIJKSTRA</div>
+                  <div className="text-red-300 text-center">DIJKSTRA</div>
                   <div className="text-purple-300 text-center">DUAN-MAO</div>
 
                   <div className="text-gray-500">EXEC</div>
-                  <div className="text-cyan-200 text-center">{algoStats.dijkstra ? `${algoStats.dijkstra.exec_ms.toFixed(0)}ms` : '—'}</div>
+                  <div className="text-red-200 text-center">{algoStats.dijkstra ? `${algoStats.dijkstra.exec_ms.toFixed(0)}ms` : '—'}</div>
                   <div className="text-purple-200 text-center">{algoStats.bmsssp ? `${algoStats.bmsssp.exec_ms.toFixed(0)}ms` : '—'}</div>
 
                   <div className="text-gray-500">ETA</div>
-                  <div className="text-cyan-200 text-center">{algoStats.dijkstra ? formatEta(algoStats.dijkstra.eta_s) : '—'}</div>
+                  <div className="text-red-200 text-center">{algoStats.dijkstra ? formatEta(algoStats.dijkstra.eta_s) : '—'}</div>
                   <div className="text-purple-200 text-center">{algoStats.bmsssp ? formatEta(algoStats.bmsssp.eta_s) : '—'}</div>
 
                   <div className="text-gray-500">DIST</div>
-                  <div className="text-cyan-200 text-center">{algoStats.dijkstra ? `${(algoStats.dijkstra.dist_m / 1000).toFixed(2)}km` : '—'}</div>
-                  <div className="text-purple-200 text-center">{algoStats.bmsssp ? `${(algoStats.bmsssp.dist_m / 1000).toFixed(2)}km` : '—'}</div>
+                  <div className="text-red-200 text-center">{algoStats.dijkstra ? `${(algoStats.dijkstra.dist_m / 1000).toFixed(2)}km` : '—'}</div>                  <div className="text-purple-200 text-center">{algoStats.bmsssp ? `${(algoStats.bmsssp.dist_m / 1000).toFixed(2)}km` : '—'}</div>
                 </div>
               )}
             </div>
@@ -1728,16 +1447,14 @@ export default function LiveMap({
 
             {/* Tactical Injections */}
             <div>
-              <div className="text-[10px] text-cyan-500/60 font-mono font-bold uppercase tracking-wider mb-2">Tactical Injections</div>
-              <div className="flex flex-col gap-1.5">
+              <div className="text-[10px] text-red-500/60 font-mono font-bold uppercase tracking-wider mb-2">Tactical Injections</div>              <div className="flex flex-col gap-1.5">
                 {Object.entries(SCENARIOS).map(([key, data]) => {
                   const isOrganTransport = key === 'ORGAN_TRANSPORT';
                   const btnClass = isOrganTransport
                     ? 'border-blue-400 text-blue-300 bg-blue-500/20 hover:bg-blue-500/40 hover:text-white hover:border-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.25)]'
                     : data.isRedAlert
-                      ? 'border-red-500/40 text-red-500 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_rgba(239,68,68,0.15)]'
-                      : 'border-cyan-500/40 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500 hover:text-white shadow-[0_0_15px_rgba(0,240,255,0.15)]';
-                  return (
+                      ? 'border-amber-500/40 text-amber-500 bg-amber-500/5 hover:bg-amber-500 hover:text-black hover:border-amber-400 shadow-[0_0_15px_rgba(234,179,8,0.3)]'
+                      : 'border-red-500/40 text-red-400 bg-red-500/5 hover:bg-red-500 hover:text-white shadow-[0_0_15px_var(--primary-red-glow-rgba-15)]';                  return (
                     <button
                       key={key}
                       onClick={() => {
@@ -1772,8 +1489,11 @@ export default function LiveMap({
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
+      {/* Dev button (panel stays at left-[39%] when open) */}
+      <div className="absolute bottom-4 left-20 z-50">
         <button
           onClick={() => {
             const next = !showEtaPanel;
@@ -1786,69 +1506,13 @@ export default function LiveMap({
           }}
           className={
             showEtaPanel
-              ? 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-cyan-500/30 border-cyan-400/50 text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.2)]'
-              : 'px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 bg-black/80 backdrop-blur-xl border-white/10 text-gray-400 hover:text-cyan-300 hover:border-cyan-500/30'
+              ? 'map-hud-panel px-4 py-2.5 rounded-xl border text-sm font-mono font-bold transition-all duration-300 bg-red-500/20 border-red-500/40 text-red-300 shadow-[0_0_0_1px_var(--primary-red-glow-rgba-15)]'
+              : 'map-hud-panel px-4 py-2.5 rounded-xl border text-sm font-mono font-bold transition-all duration-300 bg-black/40 backdrop-blur-xl border-white/10 text-gray-400 hover:text-red-300 hover:border-red-500/30'
           }
         >
           {showEtaPanel ? '✕ DEV' : '⚙ DEV'}
         </button>
-
-        {showEtaPanel && (
-          <button
-            onClick={() => {
-              setIsOsmowsMode(true);
-              map.current?.flyTo({
-                center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
-                zoom: 11,
-                pitch: 0,
-                bearing: 0,
-                essential: true,
-              });
-            }}
-            className="px-3 py-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-400 text-xs font-mono font-bold hover:bg-orange-500/30 transition-all"
-            title="Deploy Tactical Nutrition"
-          >
-            🌯
-          </button>
-        )}
-
       </div>
-
-      {isOsmowsMode && (
-        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-start pointer-events-none pt-12">
-          <div className="relative z-10 p-6 flex flex-col items-center gap-3 text-center bg-black/90 backdrop-blur-md rounded-2xl border border-orange-500/30 shadow-[0_0_50px_rgba(249,115,22,0.3)] max-w-sm pointer-events-auto">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsOsmowsMode(false);
-                if (ambulanceMarker.current) {
-                  const pos = ambulanceMarker.current.getLngLat();
-                  map.current?.flyTo({
-                    center: pos,
-                    zoom: 16,
-                    pitch: 70,
-                    bearing: smoothBearingRef.current || 0,
-                    essential: true,
-                  });
-                }
-              }}
-              className="absolute top-2 right-2 p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all cursor-pointer z-50"
-            >
-              ✕
-            </button>
-
-            <h2 className="text-xl font-black text-orange-500 tracking-tighter uppercase drop-shadow-[0_0_15px_rgba(249,115,22,0.8)] leading-none text-center">
-              NUTRITIONAL<br />DEFICIT DETECTED
-            </h2>
-
-            <p className="text-gray-300 font-mono text-xs leading-relaxed">
-              CRITICAL: <span className="text-orange-400 font-bold">OSMOW&apos;S</span> LEVEL CRITICALLY LOW. <br />
-              PLEASE REFUEL AT THE NEAREST LOCATION ASAP.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Algorithm Race Mini-Map (bottom-right) */}
       <AlgoRaceMiniMap data={algoRaceData} visible={showAlgoRace} />
     </div>

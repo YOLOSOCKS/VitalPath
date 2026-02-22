@@ -111,8 +111,8 @@ def estimate_road_eta(origin: Point, destination: Point) -> Tuple[float, float]:
     Estimate road travel distance (m) and duration (s) between two points.
 
     Implementation options:
-    - Google Routes API (preferred for production)
     - OSRM / Valhalla / OpenRouteService HTTP API
+    - OSMnx (as in app.algorithm.router) for same-region routing
     - Cached matrix for known hospital pairs
 
     Returns (distance_m, duration_s).
@@ -151,7 +151,7 @@ def compute_route(
     """
     Compute full route (road, air, or hybrid) between origin and destination.
 
-    - Road: use shortest/fastest path (e.g. Google Routes API or OSRM).
+    - Road: use shortest/fastest path (e.g. OpenStreetMap via OSRM or OSMnx).
     - Air: straight-line flight; optionally add last-mile road segment.
     - Hybrid: air leg to near destination, then road for last-mile.
 

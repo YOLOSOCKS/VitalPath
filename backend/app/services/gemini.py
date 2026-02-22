@@ -1,16 +1,51 @@
 import os
 import json
+from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 from pydantic import BaseModel
 from typing import Optional, Any, Dict
 
-load_dotenv()
-API_KEY = os.getenv("GEMINI_API_KEY")
+# Load .env from several possible locations (backend dir, cwd, cwd/backend; also .env.txt on Windows)
+_backend_dir = Path(__file__).resolve().parent.parent.parent
+_candidates = [
+    _backend_dir / ".env",
+    _backend_dir / ".env.txt",
+    Path.cwd() / ".env",
+    Path.cwd() / ".env.txt",
+    Path.cwd() / "backend" / ".env",
+    Path.cwd() / "backend" / ".env.txt",
+]
+_env_path_used = None
+for _p in _candidates:
+    if _p.exists():
+        load_dotenv(_p)
+        if _env_path_used is None:
+            _env_path_used = _p
+if _env_path_used is None:
+    load_dotenv()  # fallback: search cwd and parents
+    _env_path_used = _backend_dir / ".env"  # for status display only
+
+# Support both variable names; strip quotes, whitespace, and BOM (Windows)
+_raw = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
+API_KEY = _raw.strip().strip('"').strip("'").replace("\ufeff", "").strip() or None
+
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Initialize the modern client
 client = genai.Client(api_key=API_KEY) if API_KEY else None
+
+
+def get_gemini_status() -> dict:
+    """For debugging: report whether Gemini is configured (no key value exposed)."""
+    return {
+        "gemini_configured": client is not None,
+        "key_length": len(API_KEY) if API_KEY else 0,
+        "env_file_exists": _env_path_used.exists() if _env_path_used else False,
+        "env_path": str(_env_path_used) if _env_path_used else "none",
+        "cwd": str(Path.cwd()),
+        "model": GEMINI_MODEL,
+    }
 
 
 class ChatRequest(BaseModel):
@@ -20,14 +55,18 @@ class ChatRequest(BaseModel):
 
 async def get_ai_response(request: ChatRequest):
     if not client:
-        return {"response": "[SIMULATION] No Gemini Key found."}
+        return {"response": "Cargo Guardian needs a Gemini API key."}
 
     try:
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=request.message,
             config={
-                "system_instruction": "You are VitalPath AI, an EMS Triage Assistant. Be concise. Bullet points only."
+                "system_instruction": (
+                    "You are VitalPath AI for organ and critical medical cargo transport. "
+                    "Respond only with short, action-oriented commands. Use imperative sentences like: 'Check container temp.', 'Adjust route.', 'Verify lid seal.' "
+                    "No long explanations, no extra context, no bullet lists. One or two brief commands per response. Cold-chain, cargo viability, and next steps only."
+                )
             },
         )
         return {"response": response.text or ""}

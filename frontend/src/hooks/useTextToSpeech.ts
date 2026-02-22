@@ -27,7 +27,7 @@ export default function useTextToSpeech() {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.voice = voice;
     utterance.pitch = 1.0; 
-    utterance.rate = 1.1; // Slightly faster for "Urgency"
+    utterance.rate = 0.95; // Slightly slower for clarity
     utterance.volume = 1.0;
 
     window.speechSynthesis.speak(utterance);

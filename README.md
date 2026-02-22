@@ -4,7 +4,7 @@
 ![domain](https://img.shields.io/badge/domain-healthcare%20%26%20re--engineering-blue)
 ![frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61dafb)
 ![backend](https://img.shields.io/badge/backend-FastAPI-009688)
-![maps](https://img.shields.io/badge/maps-MapLibre%20%2B%20Google%20Routes-2e7d32)
+![maps](https://img.shields.io/badge/maps-MapLibre%20%2B%20OpenStreetMap-2e7d32)
 ![telemetry](https://img.shields.io/badge/telemetry-Recharts-ff4081)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776ab)
 ![node](https://img.shields.io/badge/node-18%2B-339933)
@@ -64,10 +64,10 @@ We focus on two practical levers:
 ## Features
 
 ### Routing & Navigation
-- **Nationwide routing** via Google Maps Routes API
-- **Geocode + Autocomplete** (Nominatim):
+- **OSM drive network routing** via OSMnx + NetworkX (directed graph)
+- **Geocode + Autocomplete**:
   - `/api/algo/geocode?q=...`
-  - `/api/algo/autocomplete?q=...` (DMV or US scope)
+  - `/api/algo/autocomplete?q=...` (bounded to York Region viewbox)
 - **Polyline generation** uses edge geometry for accurate map rendering (no straight-line node hopping)
 - **Snapped start/end** to nearest drivable nodes (prevents “inside buildings” drift)
 - **Live navigation telemetry** derived from route geometry:
@@ -112,11 +112,25 @@ We focus on two practical levers:
 
 ## Duan–Mao BM-SSSP vs Dijkstra
 
-### Baseline: Google Routes API
-Routes are computed via Google Maps Routes API with traffic-aware driving mode.
+### Baseline: Dijkstra (NetworkX)
+Dijkstra is the standard single-source shortest path approach with non-negative weights. In this repo it is used via NetworkX on the directed OSM graph, weighted by edge length.
 
 ### Experimental accelerator: Duan–Mao BM-SSSP (“Breaking the Sorting Barrier”)
-This project previously included a BM-SSSP demo runner; routing now uses Google Routes API. The runner is retained for reference only.
+Recent research (Duan et al.) describes a deterministic directed SSSP algorithm with improved asymptotic runtime in certain models, often described as “breaking the sorting barrier.”
+
+In VitalPath AI, BM-SSSP is integrated as:
+- A **TypeScript Node runner** (`backend/bmssp-runner/`) invoked by the Python backend
+- Backend converts the OSMnx graph into an edge list and requests a predecessor tree
+- Path is reconstructed from predecessors; exploration lines are derived from predecessor edges
+- A **persistent Node server runner** (`server.mjs`) is used by default to avoid per-request Node startup overhead
+- If BM-SSSP fails, VitalPath AI **falls back to Dijkstra** automatically (demo reliability)
+
+**References**
+- Paper: https://arxiv.org/abs/2504.17033  
+- Runner inspiration: https://github.com/Braeniac/bm-sssp
+
+> Reality check: BM-SSSP may not beat Dijkstra on small graphs due to constants and overhead.  
+> That’s exactly why VitalPath AI ships both — and visualizes the tradeoffs clearly via telemetry + benchmarks.
 
 ---
 ## Benchmarks & Figures
@@ -163,7 +177,8 @@ python docs/bench/make_figures.py --bench-dir docs/bench --out docs/figures --th
 - Panels provide EMS-centric information density
 
 **Backend (FastAPI)**
-- Computes routes via Google Routes API
+- OSMnx downloads/cache road graph corridor
+- Computes shortest path (Dijkstra or BM-SSSP)
 - Builds polyline, steps, cumulative distance/time arrays
 - Provides optional exploration + faint network segments for visualization
 - Exposes AI endpoints (Gemini + optional ElevenLabs)
@@ -298,7 +313,7 @@ cd backend
 cp .env.example .env
 ```
 
-Optional keys:
+Optional keys (Cargo Guardian chat needs `GEMINI_API_KEY`; get one at https://aistudio.google.com/apikey):
 ```env
 GEMINI_API_KEY=...
 ELEVENLABS_API_KEY=...
@@ -402,8 +417,11 @@ Bench details:
 OSMnx may be cold-starting (graph download/build cache).
 - Run each scenario once beforehand (warm cache), then it’s much faster.
 
-### Google Routes API errors
-Check that `GOOGLE_MAPS_SERVER_KEY` is set and has Routes API enabled.
+### “Navigation Fault: scikit-learn must be installed…”
+OSMnx nearest-node on lat/lon graphs uses BallTree:
+```bash
+pip install scikit-learn
+```
 
 ### Nominatim returns no results / rate limiting
 Nominatim is rate-limited; VitalPath AI enforces a minimum interval and caches results.
@@ -426,7 +444,7 @@ AlgoRace is shown when:
 ---
 
 ## Data attribution & licensing
-VitalPath AI uses geocoding via **Nominatim** (OpenStreetMap data).  
+VitalPath AI uses **OpenStreetMap** data via OSMnx / Overpass and geocoding via Nominatim.
 OpenStreetMap data is licensed under **ODbL** — see https://www.openstreetmap.org/copyright.
 
 ---

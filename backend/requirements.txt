@@ -22,10 +22,10 @@ grpcio==1.78.0
 grpcio-status==1.71.2
 h11==0.16.0
 httplib2==0.31.2
-httpx==0.27.2
 httptools==0.7.1
 idna==3.11
 jmespath==1.1.0
+networkx==3.6.1
 numpy==2.4.2
 packaging==26.0
 pandas==3.0.0
@@ -59,6 +59,7 @@ urllib3==2.6.3
 uvicorn==0.40.0
 watchfiles==1.1.1
 websockets>=13.0.0,<15.1.0
+osmnx
 scikit-learn
 google-genai
 geopy

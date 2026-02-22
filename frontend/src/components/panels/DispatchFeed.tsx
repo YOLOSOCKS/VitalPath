@@ -90,7 +90,7 @@ export default function DispatchFeed({ className, scenarioTitle, patientOnBoard,
     <div className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex flex-col overflow-hidden transition-all duration-300 ${className} ${open ? 'min-h-0' : 'h-12 shrink-0'}`}>
       <div
         onClick={onToggle}
-        className="h-12 shrink-0 p-3 text-cyan-400 font-mono text-sm tracking-widest uppercase border-b border-white/5 bg-white/5 flex justify-between items-center cursor-pointer hover:bg-white/5"
+        className="h-12 shrink-0 p-3 text-red-400 font-mono text-sm tracking-widest uppercase border-b border-white/5 bg-white/5 flex justify-between items-center cursor-pointer hover:bg-white/5"
       >
         <span>TRANSPORT</span>
         <span className="flex items-center gap-2">
@@ -109,7 +109,7 @@ export default function DispatchFeed({ className, scenarioTitle, patientOnBoard,
           <div key={i} className="flex gap-2 border-b border-white/5 pb-1">
             <span className="text-gray-500 shrink-0">[{log.time}]</span>
             <span className={`font-bold shrink-0 w-20 ${log.sender === "DISPATCH" ? "text-yellow-400" :
-              log.sender === "SYSTEM" ? "text-cyan-400" :
+              log.sender === "SYSTEM" ? "text-red-400" :
                 log.sender === "RECEIVING" ? "text-green-400" :
                   "text-orange-400"
             }`}>

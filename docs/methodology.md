@@ -25,7 +25,7 @@ The runner performs `--warmups` requests before recording trials.
 Warmups reduce noise from:
 - cold Python imports
 - JIT/Node server warmup (BM-SSSP runner)
-- Google Routes API cold start / network variance
+- OSMnx caching behavior
 
 ## Repeat counts
 
